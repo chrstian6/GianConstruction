@@ -17,7 +17,7 @@ export async function GET() {
 
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    
+
     const user = await User.findById(payload.id).select("-password");
     if (!user) {
       return NextResponse.json({ user: null }, { status: 200 });

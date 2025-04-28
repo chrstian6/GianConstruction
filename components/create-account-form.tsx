@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils"; // Add this import
 import { useForm } from "react-hook-form";
 import {
   Form,
@@ -32,9 +33,10 @@ import OtpVerificationModal from "./otp-verification-modal";
 
 interface CreateAccountFormProps {
   switchToLogin: () => void;
-  onRegistrationSuccess: (email: string, password:string) => void;
-
+  onRegistrationSuccess: (email: string, password: string) => void;
+  className?: string; // Added className prop
 }
+
 interface FormValues {
   firstName: string;
   lastName: string;
@@ -48,6 +50,8 @@ interface FormValues {
 
 export default function CreateAccountForm({
   switchToLogin,
+  onRegistrationSuccess,
+  className, // Added className prop
 }: CreateAccountFormProps) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -70,10 +74,9 @@ export default function CreateAccountForm({
       password: "",
       confirmPassword: "",
     },
-    mode: "onChange", // Enable real-time validation
+    mode: "onChange",
   });
 
-  // Watch for changes in password fields to validate matching
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === "password" || name === "confirmPassword") {
@@ -89,18 +92,15 @@ export default function CreateAccountForm({
     return () => subscription.unsubscribe();
   }, [form.watch]);
 
-  // Validate password match
   const validatePasswordMatch = (value: string) => {
     return value === form.getValues("password") || "Passwords do not match";
   };
 
-  // Handle form submission
   const onSubmit = async (values: FormValues) => {
     setError("");
     setSuccess("");
     setIsLoading(true);
 
-    // Check if passwords match
     if (values.password !== values.confirmPassword) {
       setError("Passwords do not match");
       setIsLoading(false);
@@ -108,77 +108,61 @@ export default function CreateAccountForm({
     }
 
     try {
-      // Send request to generate OTP with all user details
       const otpResponse = await fetch("/api/send-registration-otp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          firstName: values.firstName,
-          lastName: values.lastName,
-          email: values.email,
-          password: values.password,
-          contact: values.contact,
-          address: values.address,
-          gender: values.gender,
-        }),
+        body: JSON.stringify(values),
+        credentials: "include",
       });
 
       const otpData = await otpResponse.json();
-      if (otpResponse.ok) {
-        // Store form values for later submission after OTP verification
-        setFormValues(values);
-        // Show OTP dialog
-        setShowOtpDialog(true);
-      } else {
-        setError(otpData.message || "Failed to send verification code.");
+      if (!otpResponse.ok) {
+        throw new Error(otpData.message || "Failed to send OTP.");
       }
+
+      setFormValues(values);
+      setShowOtpDialog(true);
     } catch (err) {
-      console.error("Error:", err);
-      setError("An error occurred while sending verification code.");
+      console.error("Error during registration:", err);
+      setError("Failed to register. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle OTP success
   const handleOtpSuccess = async () => {
     if (!formValues) return;
 
     try {
-      // Verify OTP
-      const verifyResponse = await fetch("/api/verify-otp", {
+      const response = await fetch("/api/verify-otp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: formValues.email, otp: "123456" }), // Replace "123456" with actual OTP input
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formValues.email, otp: "123456" }),
       });
 
-      const verifyData = await verifyResponse.json();
-      if (verifyResponse.ok) {
-        // Close OTP dialog and show success dialog
-        setShowOtpDialog(false);
-        setShowSuccessDialog(true);
-      } else {
-        setError(verifyData.message || "Failed to verify OTP.");
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "OTP verification failed");
       }
+
+      setShowOtpDialog(false);
+      setShowSuccessDialog(true);
+      onRegistrationSuccess(formValues.email, formValues.password);
     } catch (err) {
       console.error("Error verifying OTP:", err);
-      setError("An error occurred while verifying OTP. Please try again.");
+      setError("Failed to verify OTP. Please try again.");
     }
   };
-  // Handle OTP resend
+
   const handleResendOtp = async () => {
     if (!formValues) return;
 
     try {
       const response = await fetch("/api/resend-otp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: formValues.email }),
       });
 
@@ -186,13 +170,14 @@ export default function CreateAccountForm({
       if (!response.ok) {
         throw new Error(data.message || "Failed to resend verification code.");
       }
+
+      setError("");
     } catch (err) {
       console.error("Error resending OTP:", err);
       setError("Failed to resend verification code.");
     }
   };
 
-  // Close success dialog and redirect to login
   const handleSuccessClose = () => {
     setShowSuccessDialog(false);
     form.reset();
@@ -201,7 +186,7 @@ export default function CreateAccountForm({
 
   return (
     <>
-      <Card className="w-full max-w-2xl mx-auto">
+      <Card className={cn("w-full max-w-2xl mx-auto", className)}>
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
             Create Account
@@ -210,16 +195,13 @@ export default function CreateAccountForm({
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Error or Success Messages */}
               {error && (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
 
-              {/* Form Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* First Name */}
                 <FormField
                   control={form.control}
                   name="firstName"
@@ -227,19 +209,13 @@ export default function CreateAccountForm({
                     <FormItem>
                       <FormLabel>First Name</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="John"
-                          {...field}
-                          className="focus-visible:ring-2 focus-visible:ring-primary"
-                        />
+                        <Input placeholder="First Name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{ required: "First name is required" }}
+                  rules={{ required: "Please enter your first name" }}
                 />
-
-                {/* Last Name */}
                 <FormField
                   control={form.control}
                   name="lastName"
@@ -247,19 +223,13 @@ export default function CreateAccountForm({
                     <FormItem>
                       <FormLabel>Last Name</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="Doe"
-                          {...field}
-                          className="focus-visible:ring-2 focus-visible:ring-primary"
-                        />
+                        <Input placeholder="Last Name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{ required: "Last name is required" }}
+                  rules={{ required: "Please enter your last name" }}
                 />
-
-                {/* Email */}
                 <FormField
                   control={form.control}
                   name="email"
@@ -267,52 +237,35 @@ export default function CreateAccountForm({
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="example@email.com"
-                          type="email"
-                          {...field}
-                          className="focus-visible:ring-2 focus-visible:ring-primary"
-                        />
+                        <Input placeholder="Email" type="email" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                   rules={{
-                    required: "Email is required",
+                    required: "Please enter your email",
                     pattern: {
                       value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                       message: "Invalid email address",
                     },
                   }}
                 />
-
-                {/* Contact */}
                 <FormField
                   control={form.control}
                   name="contact"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel>Contact Number</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="+1 (555) 123-4567"
-                          {...field}
-                          className="focus-visible:ring-2 focus-visible:ring-primary"
-                        />
+                        <Input placeholder="Contact Number" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                   rules={{
-                    required: "Phone number is required",
-                    minLength: {
-                      value: 10,
-                      message: "Phone number must be at least 10 digits",
-                    },
+                    required: "Please enter your contact number",
                   }}
                 />
-
-                {/* Address */}
                 <FormField
                   control={form.control}
                   name="address"
@@ -320,18 +273,13 @@ export default function CreateAccountForm({
                     <FormItem>
                       <FormLabel>Address</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="123 Main St, City"
-                          {...field}
-                          className="focus-visible:ring-2 focus-visible:ring-primary"
-                        />
+                        <Input placeholder="Address" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
+                  rules={{ required: "Please enter your address" }}
                 />
-
-                {/* Gender */}
                 <FormField
                   control={form.control}
                   name="gender"
@@ -343,103 +291,78 @@ export default function CreateAccountForm({
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="focus-visible:ring-2 focus-visible:ring-primary">
-                            <SelectValue placeholder="Select your gender" />
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Gender" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
-                          <SelectItem value="prefer-not-to-say">
-                            Prefer not to say
-                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
+                  rules={{ required: "Please select your gender" }}
                 />
-
-                {/* Password */}
                 <FormField
                   control={form.control}
                   name="password"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Password</FormLabel>
-                      <div className="relative">
-                        <FormControl>
+                      <FormControl>
+                        <div className="relative">
                           <Input
                             type={showPassword ? "text" : "password"}
-                            placeholder="••••••••"
+                            placeholder="Password"
                             {...field}
-                            className="focus-visible:ring-2 focus-visible:ring-primary pr-10"
                           />
-                        </FormControl>
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? (
-                            <EyeOff className="h-4 w-4 text-gray-500" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-gray-500" />
-                          )}
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-0 flex items-center px-3"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? <EyeOff /> : <Eye />}
+                          </button>
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                   rules={{
-                    required: "Password is required",
+                    required: "Please enter a password",
                     minLength: {
                       value: 6,
                       message: "Password must be at least 6 characters",
                     },
                   }}
                 />
-
-                {/* Confirm Password */}
                 <FormField
                   control={form.control}
                   name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Confirm Password</FormLabel>
-                      <div className="relative">
-                        <FormControl>
+                      <FormControl>
+                        <div className="relative">
                           <Input
                             type={showConfirmPassword ? "text" : "password"}
-                            placeholder="••••••••"
+                            placeholder="Confirm Password"
                             {...field}
-                            className={`focus-visible:ring-2 focus-visible:ring-primary pr-10 ${
-                              !passwordMatch && field.value
-                                ? "border-red-500"
-                                : ""
-                            }`}
                           />
-                        </FormControl>
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                          onClick={() =>
-                            setShowConfirmPassword(!showConfirmPassword)
-                          }
-                        >
-                          {showConfirmPassword ? (
-                            <EyeOff className="h-4 w-4 text-gray-500" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-gray-500" />
-                          )}
-                        </button>
-                      </div>
-                      {!passwordMatch && field.value && (
-                        <p className="text-sm font-medium text-red-500 mt-1">
-                          Passwords do not match
-                        </p>
-                      )}
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-0 flex items-center px-3"
+                            onClick={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
+                          >
+                            {showConfirmPassword ? <EyeOff /> : <Eye />}
+                          </button>
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -450,7 +373,6 @@ export default function CreateAccountForm({
                 />
               </div>
 
-              {/* Submit Button */}
               <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90"
@@ -466,7 +388,6 @@ export default function CreateAccountForm({
                 )}
               </Button>
 
-              {/* Already Have an Account? */}
               <p className="text-sm mt-4 text-center">
                 Already have an account?{" "}
                 <button
@@ -482,7 +403,6 @@ export default function CreateAccountForm({
         </CardContent>
       </Card>
 
-      {/* OTP Verification Modal */}
       <OtpVerificationModal
         isOpen={showOtpDialog}
         onClose={() => setShowOtpDialog(false)}
@@ -492,7 +412,6 @@ export default function CreateAccountForm({
         openLoginModal={switchToLogin}
       />
 
-      {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

@@ -1,13 +1,16 @@
-// components/Navbar.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { LoginForm } from "@/components/login-form";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,53 +21,43 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { LoginForm } from "@/components/login-form";
+import CreateAccountForm from "@/components/create-account-form";
+import { useModal } from "@/contexts/ModalContext";
 
 export default function Navbar() {
   const router = useRouter();
-  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, login, logout } = useAuth();
+  const {
+    isLoginOpen,
+    setIsLoginOpen,
+    isCreateAccountOpen,
+    setIsCreateAccountOpen,
+    showLogin,
+    setShowLogin,
+  } = useModal();
 
-  const { user, login, logout, loading: authLoading, checkAuth } = useAuth();
-
-  const [showLogin, setShowLogin] = useState(true);
-
-  // Debug - log current user state
-  useEffect(() => {
-    console.log("Navbar user state:", user);
-  }, [user]);
-
-  // Refresh user state when dialog is closed
-  useEffect(() => {
-    if (!isLoginOpen) {
-      checkAuth();
-    }
-  }, [isLoginOpen, checkAuth]);
-
-  const handleSwitchToSignUp = () => {
-    setShowLogin(false);
+  const getInitials = () => {
+    if (!user) return "GC";
+    return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
   };
 
   const handleLogin = async (email: string, password: string) => {
+    setIsLoading(true);
     try {
       const response = await fetch("/api/auth/login", {
-        // Updated to consistent path
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
         credentials: "include",
-        cache: "no-store",
       });
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(data.error || "Login failed");
       }
-
-      // Log received user data
-      console.log("Login response data:", data);
-
-      // Properly set the user data from the response
       login({
         id: data.user.id,
         firstName: data.user.firstName,
@@ -73,29 +66,31 @@ export default function Navbar() {
         contact: data.user.contact || "",
         gender: data.user.gender || "",
         address: data.user.address || "",
-        isActive: data.user.isActive !== false, // Default to true if undefined
-        tempRegistration: data.user.tempRegistration || false, // Default to false if undefined
+        isActive: data.user.isActive !== false,
+        tempRegistration: data.user.tempRegistration || false,
       });
-
       toast.success("Login Successful!");
       setIsLoginOpen(false);
-
-      // Force refresh auth state
-      await checkAuth();
+      router.refresh();
     } catch (error) {
       toast.error("Login Failed", {
         description:
           error instanceof Error ? error.message : "Please try again",
       });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await fetch("/api/auth/logout", { method: "POST" });
+      logout();
       toast.success("Logged out successfully");
       setMobileMenuOpen(false);
       router.push("/");
+      router.refresh(); // Add this to refresh the page and update auth state
     } catch (error) {
       toast.error("Logout Failed", {
         description:
@@ -104,9 +99,14 @@ export default function Navbar() {
     }
   };
 
-  const getInitials = () => {
-    if (!user) return "GC";
-    return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
+  const handleSwitchToSignUp = () => {
+    setIsLoginOpen(false);
+    setIsCreateAccountOpen(true);
+  };
+
+  const handleSwitchToLogin = () => {
+    setIsCreateAccountOpen(false);
+    setIsLoginOpen(true);
   };
 
   return (
@@ -132,7 +132,6 @@ export default function Navbar() {
           >
             Home
           </Link>
-
           {!user ? (
             <>
               <Link
@@ -192,20 +191,50 @@ export default function Navbar() {
 
         <div className="flex items-center gap-4">
           {!user ? (
-            <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
-              <DialogTrigger asChild>
-                <Button className="hidden md:block" variant="default">
-                  Login
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] p-0 border-0">
-                <LoginForm
-                  onLogin={handleLogin}
-                  onClose={() => setIsLoginOpen(false)}
-                  switchToSignUp={handleSwitchToSignUp}
-                />
-              </DialogContent>
-            </Dialog>
+            <>
+              <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+                <DialogTrigger asChild>
+                  <Button className="hidden md:block" variant="outline">
+                    Login
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Login</DialogTitle>
+                  </DialogHeader>
+                  <LoginForm
+                    switchToSignUp={handleSwitchToSignUp}
+                    onLogin={handleLogin}
+                    onClose={() => setIsLoginOpen(false)}
+                    isLoading={isLoading} // This was missing
+                  />
+                </DialogContent>
+              </Dialog>
+
+              {/* Separate Sign Up Dialog */}
+              <Dialog
+                open={isCreateAccountOpen}
+                onOpenChange={setIsCreateAccountOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button className="hidden md:block" variant="default">
+                    Sign Up
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Create Account</DialogTitle>
+                  </DialogHeader>
+                  <CreateAccountForm
+                    switchToLogin={handleSwitchToLogin}
+                    onRegistrationSuccess={(email, password) => {
+                      handleLogin(email, password);
+                      setIsCreateAccountOpen(false);
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+            </>
           ) : (
             <div className="hidden md:flex items-center gap-3">
               <DropdownMenu>
@@ -263,125 +292,107 @@ export default function Navbar() {
 
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-t py-4">
-          <div className="container mx-auto px-4 flex flex-col space-y-3">
-            {!user ? (
-              <>
-                <Link
-                  href="/"
-                  className="font-medium text-gray-900 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Home
-                </Link>
-                <Link
-                  href="/#about"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  About Us
-                </Link>
-                <Link
-                  href="/#services"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Services
-                </Link>
-                <Link
-                  href="/supplies"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Supplies
-                </Link>
-                <Link
-                  href="/designs"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Designs
-                </Link>
-                <Link
-                  href="/contacts"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Contacts
-                </Link>
-                <Button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setIsLoginOpen(true);
-                  }}
-                  className="mt-2"
-                >
-                  Login
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-3 py-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {getInitials()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="font-medium">
-                    Welcome, {user.firstName}!
-                  </span>
-                </div>
-                <Link
-                  href="/dashboard"
-                  className="font-medium text-gray-900 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/supplies"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Supplies
-                </Link>
-                <Link
-                  href="/designs"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Designs
-                </Link>
-                <Link
-                  href="/dashboard/profile"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Profile
-                </Link>
-                <Link
-                  href="/dashboard/history"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Order History
-                </Link>
-                <Link
-                  href="/dashboard/projects"
-                  className="font-medium text-gray-600 py-2 hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Projects
-                </Link>
-                <Button
-                  variant="destructive"
-                  onClick={handleLogout}
-                  className="mt-2"
-                >
-                  Logout
-                </Button>
-              </>
-            )}
-          </div>
+          {!user ? (
+            <>
+              <Link
+                href="/#about"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                About Us
+              </Link>
+              <Link
+                href="/#services"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Services
+              </Link>
+              <Link
+                href="/supplies"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Supplies
+              </Link>
+              <Link
+                href="/designs"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Designs
+              </Link>
+              <Button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setIsLoginOpen(true);
+                }}
+                className="mt-2 w-full"
+              >
+                Login
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 py-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {getInitials()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="font-medium">Welcome, {user.firstName}!</span>
+              </div>
+              <Link
+                href="/dashboard"
+                className="block font-medium text-gray-900 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/supplies"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Supplies
+              </Link>
+              <Link
+                href="/designs"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Designs
+              </Link>
+              <Link
+                href="/dashboard/profile"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Profile
+              </Link>
+              <Link
+                href="/dashboard/history"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Order History
+              </Link>
+              <Link
+                href="/dashboard/projects"
+                className="block font-medium text-gray-600 py-2 hover:text-primary"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Projects
+              </Link>
+              <Button
+                variant="destructive"
+                onClick={handleLogout}
+                className="mt-2"
+              >
+                Logout
+              </Button>
+            </>
+          )}
         </div>
       )}
     </header>

@@ -5,8 +5,17 @@ import { Poppins } from "next/font/google";
 import Image from "next/image";
 import { useState } from "react";
 import OtpVerificationModal from "@/components/otp-verification-modal";
-import Navbar from "@/components/Navbar";
+import { LoginForm } from "@/components/login-form";
+import CreateAccountForm from "@/components/create-account-form";
 import { AuthProvider } from "@/contexts/AuthContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 const poppins = Poppins({
   weight: ["400", "500", "600", "700"],
@@ -16,15 +25,34 @@ const poppins = Poppins({
 
 export default function Home() {
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
+  // Function to open the login modal
   const openLoginModal = () => {
-    // This will be handled by the Navbar component now
+    setShowLoginModal(true);
+    setShowCreateAccountModal(false);
   };
 
-  const handleRegistrationSuccess = (email: string) => {
+  // Function to open the create account modal
+  const openCreateAccountModal = () => {
+    setShowLoginModal(false);
+    setShowCreateAccountModal(true);
+  };
+
+  // Function to close all modals
+  const closeAllModals = () => {
+    setShowLoginModal(false);
+    setShowCreateAccountModal(false);
+    setShowOtpModal(false);
+  };
+
+  // Handle successful registration
+  const handleRegistrationSuccess = (email: string, password: string) => {
     setUserEmail(email);
     setShowOtpModal(true);
+    setShowCreateAccountModal(false);
   };
 
   return (
@@ -58,7 +86,7 @@ export default function Home() {
             <div className="md:w-1/2 flex justify-center">
               <div className="relative w-full max-w-lg aspect-square rounded-xl overflow-hidden shadow-xl">
                 <Image
-                  src="/images/gianhero.jpg" // Fixed the image extension
+                  src="/images/gianhero.jpg"
                   alt="Construction Site"
                   fill
                   className="object-cover"
@@ -402,12 +430,38 @@ export default function Home() {
         </footer>
 
         {/* OTP Verification Modal */}
+
+        {/* Create Account Modal */}
+        <Dialog
+          open={showCreateAccountModal}
+          onOpenChange={(open) => {
+            setShowCreateAccountModal(open);
+            if (!open) {
+              setShowCreateAccountModal(false);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <VisuallyHidden>
+                <DialogTitle>Create Account</DialogTitle>
+              </VisuallyHidden>
+            </DialogHeader>
+            <CreateAccountForm
+              switchToLogin={() => {
+                setShowCreateAccountModal(false);
+                setShowLoginModal(true);
+              }}
+              onRegistrationSuccess={handleRegistrationSuccess}
+            />
+          </DialogContent>
+        </Dialog>
         <OtpVerificationModal
           isOpen={showOtpModal}
           onClose={() => setShowOtpModal(false)}
           email={userEmail}
           onSuccess={() => {
-            // Any additional success logic if needed
+            closeAllModals();
           }}
           onResend={async () => {
             // Your resend OTP logic
