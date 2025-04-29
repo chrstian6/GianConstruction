@@ -15,8 +15,9 @@ export async function POST(req: Request) {
 
   try {
     const { email, password } = await req.json();
+    console.log("Login attempt for email:", email);
 
-    // Brute force protection
+    // Rate limiting check
     const userAttempts = loginAttempts.get(email);
     if (userAttempts && userAttempts.attempts >= 3) {
       const timeSinceLastAttempt = Date.now() - userAttempts.lastAttempt;
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
       }
     }
 
+    // User lookup
     const user = await User.findOne({ email });
     if (!user) {
       loginAttempts.set(email, {
@@ -47,6 +49,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Password verification
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       loginAttempts.set(email, {
@@ -59,6 +62,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Account status check
     if (!user.isActive) {
       return NextResponse.json(
         { error: "Account not activated. Please check your email." },
@@ -66,21 +70,37 @@ export async function POST(req: Request) {
       );
     }
 
+    // Token generation with proper encoding
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const token = await new SignJWT({
-      id: user._id,
+    const tokenPayload = {
+      id: user._id.toString(),
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-    })
+      contact: user.contact || "",
+      gender: user.gender || "",
+      address: user.address || "",
+      role: user.role || "user",
+      isActive: user.isActive,
+    };
+
+    const token = await new SignJWT(tokenPayload)
       .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
       .setExpirationTime("1d")
       .sign(secret);
 
-    const cookieStore = await cookies();
-    cookieStore.set({
-      name: "token",
-      value: token,
+    // Secure cookie settings
+    const response = NextResponse.json({
+      user: tokenPayload,
+      isAdmin: user.role === "admin",
+      redirectTo: user.role === "admin" ? "/admin" : null,
+    });
+
+    // Set cookie with proper encoding
+    response.cookies.set({
+      name: "aap-jwt",
+      value: encodeURIComponent(token), // Properly encode the token
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
@@ -89,19 +109,7 @@ export async function POST(req: Request) {
     });
 
     loginAttempts.delete(email);
-
-    return NextResponse.json({
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        contact: user.contact,
-        gender: user.gender,
-        address: user.address,
-        isActive: user.isActive,
-      },
-    });
+    return response;
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(

@@ -13,16 +13,22 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+// Dashboard page, now under app/(user)/dashboard to inherit Navbar from app/(user)/layout.tsx
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   // Redirect if not logged in
   useEffect(() => {
-    if (!user) {
-      router.push("/");
+    if (isLoading) {
+      console.log("Dashboard: Skipping redirect, isLoading=true");
+      return;
     }
-  }, [user, router]);
+    if (!user) {
+      console.log("Dashboard: No user, redirecting to /");
+      router.replace("/");
+    }
+  }, [user, isLoading, router]);
 
   // Mock data for the dashboard
   const activeProjects = [
@@ -50,7 +56,7 @@ export default function Dashboard() {
     },
   ];
 
-  if (!user) {
+  if (isLoading || !user) {
     return <div className="container mx-auto px-4 py-8">Loading...</div>;
   }
 

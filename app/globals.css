@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* Remove tw-animate-css as it's not needed */
 /* @import "tw-animate-css"; */
@@ -129,5 +130,20 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Ensure no horizontal scroll */
+html,
+
+/* Smooth sidebar transitions */
+.sidebar {
+  transition: transform 300ms ease;
+}
+
+/* Fix for mobile viewport units */
+@supports (-webkit-touch-callout: none) {
+  .h-screen {
+    height: -webkit-fill-available;
   }
 }

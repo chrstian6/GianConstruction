@@ -1,4 +1,3 @@
-// models/user.ts
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -10,6 +9,7 @@ const userSchema = new mongoose.Schema(
     contact: { type: String, required: true },
     gender: { type: String },
     address: { type: String },
+    role: { type: String, enum: ["user", "admin"], default: "user" },
     otp: { type: String },
     otpExpiry: { type: Date },
     tempRegistration: { type: Boolean, default: true },
@@ -30,6 +30,7 @@ export interface IUser extends mongoose.Document {
   contact: string;
   gender?: string;
   address?: string;
+  role: string;
   otp?: string;
   otpExpiry?: Date;
   tempRegistration: boolean;

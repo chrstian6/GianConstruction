@@ -1,9 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "sonner";
 
 interface LoginFormProps {
   switchToSignUp: () => void;
@@ -21,18 +23,82 @@ export function LoginForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+
+  // Clear error when user modifies form
+  useEffect(() => {
+    setError("");
+    // Validate email format
+    if (email && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email)) {
+      setEmailError("Please enter a valid email address");
+    } else {
+      setEmailError("");
+    }
+  }, [email, password]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
+    // Client-side validation
+    if (!email || !password) {
+      const errorMsg = "Please fill in all fields";
+      setError(errorMsg);
+      toast.error(errorMsg);
+      return;
+    }
+    if (emailError) {
+      const errorMsg = "Please correct the email format";
+      setError(errorMsg);
+      toast.error(errorMsg);
+      return;
+    }
+
     try {
       await onLogin(email, password);
+      // onClose() is handled in Navbar's handleLogin
     } catch (err) {
-      console.error("Login failed:", err);
-      setError(
-        err instanceof Error ? err.message : "Invalid email or password"
-      );
+      let errorMsg = "An unexpected error occurred. Please try again.";
+
+      // Handle specific error cases
+      if (err instanceof Response) {
+        const data = await err.json().catch(() => ({}));
+        switch (err.status) {
+          case 401:
+            errorMsg = data.error || "Invalid email or password";
+            break;
+          case 404:
+            errorMsg = data.error || "User not found";
+            break;
+          case 403:
+            errorMsg =
+              data.error || "Account is inactive. Please contact support.";
+            break;
+          case 429:
+            errorMsg =
+              data.error || "Too many attempts. Please try again later.";
+            break;
+          case 500:
+            errorMsg = data.error || "Server error. Please try again later.";
+            break;
+          default:
+            errorMsg =
+              data.error || "An unexpected error occurred. Please try again.";
+        }
+      } else if (err instanceof TypeError && err.message.includes("fetch")) {
+        errorMsg = "Network error. Please check your connection and try again.";
+      } else {
+        errorMsg =
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred. Please try again.";
+      }
+
+      setError(errorMsg);
+      toast.error(errorMsg, {
+        description:
+          err instanceof Response ? `Status: ${err.status}` : undefined,
+      });
     }
   };
 
@@ -46,9 +112,9 @@ export function LoginForm({
       </div>
 
       {error && (
-        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -62,8 +128,15 @@ export function LoginForm({
             onChange={(e) => setEmail(e.target.value)}
             required
             disabled={isLoading}
-            className="h-10"
+            className={`h-10 ${emailError ? "border-destructive" : ""}`}
+            aria-invalid={!!emailError}
+            aria-describedby={emailError ? "email-error" : undefined}
           />
+          {emailError && (
+            <p id="email-error" className="text-sm text-destructive">
+              {emailError}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -73,7 +146,10 @@ export function LoginForm({
               type="button"
               className="text-sm font-medium text-primary hover:underline"
               onClick={() => {
-                // Add your forgot password logic here
+                const errorMsg =
+                  "Forgot password feature is not implemented yet.";
+                setError(errorMsg);
+                toast.error(errorMsg);
               }}
               disabled={isLoading}
             >
@@ -91,7 +167,11 @@ export function LoginForm({
           />
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isLoading || !!emailError}
+        >
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -114,6 +194,6 @@ export function LoginForm({
           Sign up
         </button>
       </div>
-    </div>  
+    </div>
   );
 }
