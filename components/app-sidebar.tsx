@@ -49,6 +49,10 @@ const data = {
           url: "#",
         },
         {
+          title: "Design Catalog",
+          url: "/admin/projects/designs", // Moved designs under projects
+        },
+        {
           title: "Completed Projects",
           url: "#",
         },

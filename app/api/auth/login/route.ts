@@ -15,7 +15,6 @@ export async function POST(req: Request) {
 
   try {
     const { email, password } = await req.json();
-    console.log("Login attempt for email:", email);
 
     // Rate limiting check
     const userAttempts = loginAttempts.get(email);
@@ -65,7 +64,7 @@ export async function POST(req: Request) {
     // Account status check
     if (!user.isActive) {
       return NextResponse.json(
-        { error: "Account not activated. Please check your email." },
+        { error: "Account is inactive. Please contact support." },
         { status: 403 }
       );
     }
@@ -93,7 +92,7 @@ export async function POST(req: Request) {
     // Response with both user data and token
     const response = NextResponse.json({
       user: tokenPayload,
-      token: token, // Explicitly include the token
+      token: token,
       isAdmin: user.role === "admin",
       redirectTo: user.role === "admin" ? "/admin" : null,
     });
@@ -112,10 +111,11 @@ export async function POST(req: Request) {
     loginAttempts.delete(email);
     return response;
   } catch (error) {
-    console.error("Login error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "An unexpected error occurred. Please try again." },
       { status: 500 }
     );
   }
 }
+
+

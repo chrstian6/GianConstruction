@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
+// Define the LoginFormProps interface
 interface LoginFormProps {
   switchToSignUp: () => void;
   onLogin: (email: string, password: string) => Promise<void>;
@@ -22,82 +23,49 @@ export function LoginForm({
 }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [emailError, setEmailError] = useState("");
+  const [formError, setFormError] = useState<{
+    message: string;
+    type?: "email" | "password" | "general";
+  } | null>(null);
 
-  // Clear error when user modifies form
-  useEffect(() => {
-    setError("");
-    // Validate email format
-    if (email && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email)) {
-      setEmailError("Please enter a valid email address");
-    } else {
-      setEmailError("");
-    }
-  }, [email, password]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setFormError(null);
 
-    // Client-side validation
+    // Basic validation
     if (!email || !password) {
-      const errorMsg = "Please fill in all fields";
-      setError(errorMsg);
-      toast.error(errorMsg);
+      setFormError({
+        message: "Please fill in all fields",
+        type: "general",
+      });
       return;
     }
-    if (emailError) {
-      const errorMsg = "Please correct the email format";
-      setError(errorMsg);
-      toast.error(errorMsg);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFormError({
+        message: "Please enter a valid email address",
+        type: "email",
+      });
       return;
     }
 
     try {
       await onLogin(email, password);
-      // onClose() is handled in Navbar's handleLogin
-    } catch (err) {
-      let errorMsg = "An unexpected error occurred. Please try again.";
+      toast.success("Login successful!");
+      onClose();
+    } catch (error: any) {
+      let errorMessage = "Login failed. Please try again.";
 
-      // Handle specific error cases
-      if (err instanceof Response) {
-        const data = await err.json().catch(() => ({}));
-        switch (err.status) {
-          case 401:
-            errorMsg = data.error || "Invalid email or password";
-            break;
-          case 404:
-            errorMsg = data.error || "User not found";
-            break;
-          case 403:
-            errorMsg =
-              data.error || "Account is inactive. Please contact support.";
-            break;
-          case 429:
-            errorMsg =
-              data.error || "Too many attempts. Please try again later.";
-            break;
-          case 500:
-            errorMsg = data.error || "Server error. Please try again later.";
-            break;
-          default:
-            errorMsg =
-              data.error || "An unexpected error occurred. Please try again.";
-        }
-      } else if (err instanceof TypeError && err.message.includes("fetch")) {
-        errorMsg = "Network error. Please check your connection and try again.";
-      } else {
-        errorMsg =
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred. Please try again.";
+      if (error.response) {
+        const data = await error.response.json();
+        errorMessage = data.error || errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
       }
 
-      setError(errorMsg);
-      toast.error(errorMsg, {
-        description:
-          err instanceof Response ? `Status: ${err.status}` : undefined,
+      setFormError({
+        message: errorMessage,
+        type: "general",
       });
     }
   };
@@ -105,15 +73,15 @@ export function LoginForm({
   return (
     <div className="mx-auto w-full max-w-sm space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+        <h1 className="text-2xl font-bold">Welcome back</h1>
         <p className="text-muted-foreground">
           Enter your credentials to access your account
         </p>
       </div>
 
-      {error && (
+      {formError && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{formError.message}</AlertDescription>
         </Alert>
       )}
 
@@ -128,34 +96,12 @@ export function LoginForm({
             onChange={(e) => setEmail(e.target.value)}
             required
             disabled={isLoading}
-            className={`h-10 ${emailError ? "border-destructive" : ""}`}
-            aria-invalid={!!emailError}
-            aria-describedby={emailError ? "email-error" : undefined}
+            className={formError?.type === "email" ? "border-destructive" : ""}
           />
-          {emailError && (
-            <p id="email-error" className="text-sm text-destructive">
-              {emailError}
-            </p>
-          )}
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <button
-              type="button"
-              className="text-sm font-medium text-primary hover:underline"
-              onClick={() => {
-                const errorMsg =
-                  "Forgot password feature is not implemented yet.";
-                setError(errorMsg);
-                toast.error(errorMsg);
-              }}
-              disabled={isLoading}
-            >
-              Forgot password?
-            </button>
-          </div>
+          <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type="password"
@@ -163,15 +109,13 @@ export function LoginForm({
             onChange={(e) => setPassword(e.target.value)}
             required
             disabled={isLoading}
-            className="h-10"
+            className={
+              formError?.type === "password" ? "border-destructive" : ""
+            }
           />
         </div>
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={isLoading || !!emailError}
-        >
+        <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

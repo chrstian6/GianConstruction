@@ -52,36 +52,22 @@ export default function Navbar() {
   const handleLogin = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      console.log("Attempting login with email:", email);
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
         credentials: "include",
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Login failed");
+      }
+
       const data = await response.json();
-      login(data);
-      console.log("Login response:", data);
-      if (!response.ok) throw new Error(data.error || "Login failed");
-
-      login({
-        id: data.user.id,
-        firstName: data.user.firstName,
-        lastName: data.user.lastName,
-        email: data.user.email,
-        contact: data.user.contact || "",
-        gender: data.user.gender || "",
-        address: data.user.address || "",
-        role: data.user.role || "user",
-        isActive: data.user.isActive,
-        token: data.user.token, // Ensure token is included
-      });
-
-      toast.success("Login Successful!");
-      setIsLoginOpen(false);
+      login(data.user);
     } catch (error) {
-      console.error("Login error:", error);
-      throw error;
+      throw error; // This will be caught by LoginForm
     } finally {
       setIsLoading(false);
     }
