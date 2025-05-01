@@ -90,17 +90,18 @@ export async function POST(req: Request) {
       .setExpirationTime("1d")
       .sign(secret);
 
-    // Secure cookie settings
+    // Response with both user data and token
     const response = NextResponse.json({
       user: tokenPayload,
+      token: token, // Explicitly include the token
       isAdmin: user.role === "admin",
       redirectTo: user.role === "admin" ? "/admin" : null,
     });
 
-    // Set cookie with proper encoding
+    // Set HTTP-only cookie
     response.cookies.set({
-      name: "aap-jwt",
-      value: encodeURIComponent(token), // Properly encode the token
+      name: "token",
+      value: token,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",

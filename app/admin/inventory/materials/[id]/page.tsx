@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import{ MaterialForm } from "@/components/inventory/MaterialForm";
-import { getMaterialById } from "../../../../../lib/actions/material.action";
-import { getCategories } from "../../../../../lib/actions/category.actions";
+import { getMaterialById } from "@/lib/actions/material.action";
+import { getCategories } from "@/lib/actions/category.actions";
 
 export default async function MaterialPage({ params }: { params: { id: string } }) {
   const material = await getMaterialById(params.id);

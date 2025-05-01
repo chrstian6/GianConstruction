@@ -34,8 +34,9 @@ interface MaterialFormProps {
   categories: { _id: string; name: string }[];
   isEdit?: boolean;
   onSuccess?: () => void;
+  onSubmitStart?: () => void; // Add this line
+  hideButtons?: boolean;
 }
-
 export function MaterialForm({
   initialData,
   categories,
@@ -162,7 +163,7 @@ export function MaterialForm({
 
       toast.success(isEdit ? "Material updated" : "Material created");
       onSuccess?.();
-      router.push("/admin/inventory/materials");
+      // Remove the router.push since the modal will close
     } catch (error) {
       console.error("Submission error:", error);
       toast.error(error instanceof Error ? error.message : "Operation failed");
@@ -174,6 +175,7 @@ export function MaterialForm({
   return (
     <Form {...form}>
       <form
+        id="material-form"
         onSubmit={form.handleSubmit(
           onSubmit as SubmitHandler<MaterialFormValues>
         )}
@@ -651,28 +653,6 @@ export function MaterialForm({
               />
             </div>
           </div>
-        </div>
-
-        <div className="flex justify-end gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push("/admin/inventory/materials")}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isEdit ? "Updating..." : "Creating..."}
-              </>
-            ) : isEdit ? (
-              "Update Material"
-            ) : (
-              "Create Material"
-            )}
-          </Button>
         </div>
       </form>
     </Form>

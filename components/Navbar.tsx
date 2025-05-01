@@ -60,6 +60,7 @@ export default function Navbar() {
         credentials: "include",
       });
       const data = await response.json();
+      login(data);
       console.log("Login response:", data);
       if (!response.ok) throw new Error(data.error || "Login failed");
 
@@ -73,6 +74,7 @@ export default function Navbar() {
         address: data.user.address || "",
         role: data.user.role || "user",
         isActive: data.user.isActive,
+        token: data.user.token, // Ensure token is included
       });
 
       toast.success("Login Successful!");

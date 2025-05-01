@@ -1,8 +1,8 @@
 "use client";
 
 import { format } from "date-fns";
-import { LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { LogOut, ChevronRight } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import {
@@ -14,10 +14,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export function SiteHeader() {
   const { logout, user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [currentTime, setCurrentTime] = useState<string>("");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -33,43 +35,94 @@ export function SiteHeader() {
   }, []);
 
   const handleLogout = async () => {
-    console.log("SiteHeader: handleLogout started");
     setIsLoggingOut(true);
     try {
-      console.log("SiteHeader: Checking logout function");
       if (!logout || typeof logout !== "function") {
-        console.error(
-          "SiteHeader: logout is undefined or not a function",
-          logout
-        );
         throw new Error("Logout function not available");
       }
-      console.log("SiteHeader: Calling AuthContext logout");
       await logout();
-      console.log("SiteHeader: logout completed successfully");
       setShowLogoutModal(false);
     } catch (error) {
-      console.error("SiteHeader: handleLogout error:", error);
+      console.error("Logout error:", error);
     } finally {
-      console.log("SiteHeader: handleLogout finished, resetting isLoggingOut");
       setIsLoggingOut(false);
     }
   };
 
-  const onLogoutClick = () => {
-    console.log("SiteHeader: Log Out button clicked");
-    handleLogout();
+  // Generate breadcrumbs from pathname
+  const generateBreadcrumbs = () => {
+    const paths = pathname.split("/").filter(Boolean);
+    const breadcrumbs = [];
+
+    // Always start with Dashboard
+    breadcrumbs.push({
+      name: "Dashboard",
+      href: "/admin",
+      isCurrent: pathname === "/admin",
+      isClickable: true,
+    });
+
+    // Add other paths
+    let currentPath = "/admin";
+    for (let i = 0; i < paths.length; i++) {
+      if (paths[i] === "admin") continue; // Skip the admin part
+
+      currentPath += `/${paths[i]}`;
+      const name = paths[i]
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+
+      // Special case for "inventory" - make it non-clickable
+      const isClickable = paths[i] !== "inventory" && i !== paths.length - 1;
+
+      breadcrumbs.push({
+        name,
+        href: currentPath,
+        isCurrent: i === paths.length - 1,
+        isClickable,
+      });
+    }
+
+    return breadcrumbs;
   };
+
+  const breadcrumbs = generateBreadcrumbs();
 
   return (
     <>
       <header className="sticky top-0 z-10 flex h-16 w-full items-center justify-between border-b bg-background px-4">
-        <div className="text-sm text-muted-foreground">
-          {format(new Date(), "EEEE, MMMM d, yyyy")}
+        <div className="flex items-center gap-2">
+          {/* Breadcrumbs */}
+          <nav className="flex items-center text-sm">
+            {breadcrumbs.map((crumb, index) => (
+              <div key={index} className="flex items-center">
+                {index > 0 && (
+                  <ChevronRight className="mx-2 h-4 w-4 text-muted-foreground" />
+                )}
+                {crumb.isCurrent ? (
+                  <span className="font-medium text-foreground">
+                    {crumb.name}
+                  </span>
+                ) : crumb.isClickable ? (
+                  <Link
+                    href={crumb.href}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    {crumb.name}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">{crumb.name}</span>
+                )}
+              </div>
+            ))}
+          </nav>
         </div>
+
         <div className="absolute left-1/2 -translate-x-1/2 text-sm font-medium">
           {currentTime}
         </div>
+
         <div className="flex items-center gap-4">
           {user && (
             <div className="hidden sm:block">
@@ -85,33 +138,19 @@ export function SiteHeader() {
             variant="ghost"
             aria-label="Sign Out"
             className="flex items-center gap-2 rounded-md p-2 text-sm font-medium hover:bg-gray-100"
-            onClick={() => {
-              console.log("SiteHeader: Sign Out button clicked");
-              setShowLogoutModal(true);
-            }}
+            onClick={() => setShowLogoutModal(true)}
             disabled={isLoggingOut}
           >
             <LogOut className="size-4" />
             <span className="hidden sm:inline">Sign Out</span>
           </Button>
-          {user && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                console.log("SiteHeader: Direct Logout button clicked");
-                handleLogout();
-              }}
-              disabled={isLoggingOut}
-            >
-              Direct Logout
-            </Button>
-          )}
         </div>
       </header>
+
+      {/* Logout confirmation dialog */}
       <Dialog
         open={showLogoutModal}
         onOpenChange={(open) => {
-          console.log(`SiteHeader: Logout modal ${open ? "opened" : "closed"}`);
           if (!isLoggingOut) {
             setShowLogoutModal(open);
           }
@@ -127,17 +166,14 @@ export function SiteHeader() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
-                console.log("SiteHeader: Cancel button clicked");
-                setShowLogoutModal(false);
-              }}
+              onClick={() => setShowLogoutModal(false)}
               disabled={isLoggingOut}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={onLogoutClick}
+              onClick={handleLogout}
               disabled={isLoggingOut}
             >
               {isLoggingOut ? "Logging Out..." : "Log Out"}

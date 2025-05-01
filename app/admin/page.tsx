@@ -121,6 +121,70 @@ export default function AdminDashboard() {
   );
 }
 
+// Skeleton Components
+function StatCardSkeleton() {
+  return (
+    <div className="bg-card rounded-lg border p-6 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="h-4 w-24 rounded bg-gray-200"></div>
+        <div className="size-5 rounded bg-gray-200"></div>
+      </div>
+      <div className="mt-4 flex items-end justify-between">
+        <div className="h-8 w-16 rounded bg-gray-200"></div>
+        <div className="h-4 w-16 rounded bg-gray-200"></div>
+      </div>
+    </div>
+  );
+}
+
+function AlertCardSkeleton() {
+  return (
+    <div className="rounded-lg border p-4 bg-gray-50">
+      <div className="flex items-start">
+        <div className="h-5 w-5 rounded-full bg-gray-200"></div>
+        <div className="ml-3 space-y-2">
+          <div className="h-4 w-32 rounded bg-gray-200"></div>
+          <div className="h-4 w-48 rounded bg-gray-200"></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectCardSkeleton() {
+  return (
+    <div className="rounded-lg border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="h-5 w-32 rounded bg-gray-200"></div>
+        <div className="h-5 w-16 rounded bg-gray-200"></div>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between">
+          <div className="h-4 w-16 rounded bg-gray-200"></div>
+          <div className="h-4 w-8 rounded bg-gray-200"></div>
+        </div>
+        <div className="mt-2 h-2 w-full rounded-full bg-gray-200"></div>
+      </div>
+      <div className="mt-3 flex items-center">
+        <div className="mr-1 h-4 w-4 rounded-full bg-gray-200"></div>
+        <div className="h-4 w-24 rounded bg-gray-200"></div>
+      </div>
+    </div>
+  );
+}
+
+function ChartCardSkeleton() {
+  return (
+    <div className="rounded-lg border bg-card p-6 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-32 rounded bg-gray-200"></div>
+        <div className="h-8 w-24 rounded bg-gray-200"></div>
+      </div>
+      <div className="mt-4 h-64 rounded-md bg-gray-200"></div>
+    </div>
+  );
+}
+
 // Component Definitions (can be moved to separate files if preferred)
 function StatCard({
   title,
