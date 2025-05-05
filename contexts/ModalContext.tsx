@@ -20,6 +20,13 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
   const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
 
   useEffect(() => {
+    console.log("ModalProvider initialized", {
+      isLoginOpen,
+      isCreateAccountOpen,
+    });
+  }, []);
+
+  useEffect(() => {
     console.log("ModalContext: isLoginOpen changed to", isLoginOpen);
   }, [isLoginOpen]);
 
@@ -45,5 +52,9 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useModal() {
-  return useContext(ModalContext);
+  const context = useContext(ModalContext);
+  if (!context) {
+    throw new Error("useModal must be used within a ModalProvider");
+  }
+  return context;
 }

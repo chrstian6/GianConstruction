@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CategoryForm } from "../inventory/CategoryForm";
+import { CategoryForm } from "../../inventory/CategoryForm";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 

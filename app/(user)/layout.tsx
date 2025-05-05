@@ -1,20 +1,21 @@
-"use client";
-import { ReactNode } from "react";
-import { ModalProvider } from "@/contexts/ModalContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { Toaster } from "sonner";
 import Navbar from "@/components/Navbar";
+import ClientLayout from "./ClientLayout";
 
-export default function UserLayoutClient({
+export default function UserLayout({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
+  console.log("UserLayout: Rendering for user routes");
+
   return (
-    <ModalProvider>
-      <AuthProvider>
-        <Navbar />
-        <div className="flex flex-col min-h-screen">{children}</div>
-      </AuthProvider>
-    </ModalProvider>
+    <ClientLayout isAdmin={false}>
+      <Navbar />
+      <div className="flex flex-col min-h-screen">
+        {children}
+        <Toaster position="bottom-right" richColors />
+      </div>
+    </ClientLayout>
   );
 }

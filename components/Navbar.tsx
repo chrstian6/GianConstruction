@@ -1,438 +1,285 @@
 "use client";
-import { useState, useEffect } from "react";
-import Image from "next/image";
+import { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
+import { useModal } from "@/contexts/ModalContext";
+import { Button } from "@/components/ui/button";
+import { ShoppingCart, User } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
-import { useModal } from "@/contexts/ModalContext";
-import { LoginForm } from "@/components/login-form";
-import CreateAccountForm from "@/components/create-account-form";
-import { ShoppingCart } from "lucide-react";
 
 export default function Navbar() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, login, logout } = useAuth();
-  const {
-    isLoginOpen,
-    setIsLoginOpen,
-    isCreateAccountOpen,
-    setIsCreateAccountOpen,
-  } = useModal();
+  const { user, loading, logout } = useAuth();
+  const { setIsLoginOpen, setIsCreateAccountOpen } = useModal();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      setIsLoginOpen(false);
-      setIsCreateAccountOpen(false);
-    }
-  }, [user, setIsLoginOpen, setIsCreateAccountOpen]);
-
-  const getInitials = () => {
-    if (!user) return "GC";
-    return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
-  };
-
-  const handleLogin = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Login failed");
-      }
-
-      const data = await response.json();
-      login(data.user);
-    } catch (error) {
-      throw error; // This will be caught by LoginForm
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  console.log(
+    "Navbar: Rendering, user:",
+    user ? user.email : "none",
+    "loading:",
+    loading
+  );
 
   const handleLogout = async () => {
-    console.log("Logout initiated in Navbar");
+    setIsLoggingOut(true);
     try {
+      if (!logout || typeof logout !== "function") {
+        throw new Error("Logout function not available");
+      }
       await logout();
-      console.log("Logout successful in Navbar");
+      console.log(
+        "Navbar: Logout successful, navigation handled by AuthContext"
+      );
       toast.success("Logged out successfully");
-      setMobileMenuOpen(false);
+      setIsLogoutModalOpen(false);
     } catch (error) {
-      console.error("Navbar logout error:", error);
-      toast.error("Logout Failed", {
-        description:
-          error instanceof Error ? error.message : "Please try again",
-      });
+      console.error("Navbar: Logout error:", error);
+      toast.error("Failed to log out");
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
-  const handleSwitchToSignUp = () => {
-    setIsLoginOpen(false);
-    setIsCreateAccountOpen(true);
-  };
+  const navLinks = loading
+    ? []
+    : user
+    ? [
+        { href: "/dashboard", label: "Dashboard" },
+        { href: "/supplies", label: "Supplies" },
+        { href: "/designs", label: "Designs" },
+      ]
+    : [
+        { href: "/", label: "Home" },
+        { href: "/#about", label: "About" },
+        { href: "/#services", label: "Services" },
+        { href: "/supplies", label: "Supplies" },
+        { href: "/designs", label: "Designs" },
+      ];
 
-  const handleSwitchToLogin = () => {
-    setIsCreateAccountOpen(false);
-    setIsLoginOpen(true);
-  };
+  if (loading) {
+    console.log("Navbar: Loading state, rendering skeleton");
+    return (
+      <nav className="bg-white shadow-md">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold text-gray-900">
+            Gian Construction
+          </Link>
+          <div className="h-8 w-32 animate-pulse rounded bg-gray-200" />
+        </div>
+      </nav>
+    );
+  }
+
+  console.log(
+    "Navbar: Rendering full navbar, user:",
+    user ? "authenticated" : "unauthenticated"
+  );
 
   return (
-    <header className="sticky top-0 z-50 bg-white shadow-sm">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <div className="flex-shrink-0">
-          <Link
-            href={
-              user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/"
-            }
-          >
-            <Image
-              src="/images/gianconstruction2.png"
-              alt="Gian Construction"
-              width={160}
-              height={60}
-              className="h-12 w-auto"
-              priority
-            />
+    <>
+      <nav className="bg-white shadow-md">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold text-gray-900">
+            Gian Construction
           </Link>
-        </div>
 
-        <nav className="hidden md:flex items-center space-x-8">
-          {user ? (
-            <>
+          {/* Desktop Menu */}
+          <div className="hidden md:flex items-center space-x-6">
+            {navLinks.map((link) => (
               <Link
-                href={user.role === "admin" ? "/admin" : "/dashboard"}
-                className="font-medium text-gray-900 hover:text-primary transition-colors"
+                key={link.href}
+                href={link.href}
+                className="text-gray-600 hover:text-primary transition-colors"
               >
-                Dashboard
+                {link.label}
               </Link>
-              {user.role === "user" && (
-                <>
-                  {/* Home link removed for logged-in users */}
-                  <Link
-                    href="/supplies"
-                    className="font-medium text-gray-600 hover:text-primary transition-colors"
-                  >
-                    Supplies
-                  </Link>
-                  <Link
-                    href="/designs"
-                    className="font-medium text-gray-600 hover:text-primary transition-colors"
-                  >
-                    Designs
-                  </Link>
-                  <Link
-                    href="/projects"
-                    className="font-medium text-gray-600 hover:text-primary transition-colors"
-                  >
-                    Projects
-                  </Link>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <Link
-                href="/"
-                className="font-medium text-gray-900 hover:text-primary transition-colors"
-              >
-                Home
+            ))}
+            {user && (
+              <Link href="/cart" className="text-gray-600 hover:text-primary">
+                <ShoppingCart className="h-6 w-6" />
               </Link>
-              <Link
-                href="/#about"
-                className="font-medium text-gray-600 hover:text-primary transition-colors"
-              >
-                About Us
-              </Link>
-              <Link
-                href="/#services"
-                className="font-medium text-gray-600 hover:text-primary transition-colors"
-              >
-                Services
-              </Link>
-              <Link
-                href="/supplies"
-                className="font-medium text-gray-600 hover:text-primary transition-colors"
-              >
-                Supplies
-              </Link>
-              <Link
-                href="/designs"
-                className="font-medium text-gray-600 hover:text-primary transition-colors"
-              >
-                Designs
-              </Link>
-            </>
-          )}
-        </nav>
-
-        <div className="flex items-center gap-4">
-          {/* Cart button for logged-in users */}
-          {user && user.role === "user" && (
-            <Link href="/cart">
-              <Button variant="ghost" size="icon" className="relative">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="absolute top-0 right-0 h-4 w-4 bg-primary rounded-full text-xs text-white flex items-center justify-center">
-                  0
-                </span>
-              </Button>
-            </Link>
-          )}
-
-          {!user ? (
-            <div className="flex items-center gap-2">
-              {/* Login button and dialog */}
-              <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
-                <DialogTrigger asChild>
-                  <Button className="hidden md:block" variant="outline">
-                    Login
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Login</DialogTitle>
-                  </DialogHeader>
-                  <LoginForm
-                    switchToSignUp={handleSwitchToSignUp}
-                    onLogin={handleLogin}
-                    onClose={() => setIsLoginOpen(false)}
-                    isLoading={isLoading}
-                  />
-                </DialogContent>
-              </Dialog>
-
-              {/* Sign up button and dialog */}
-              <Dialog
-                open={isCreateAccountOpen}
-                onOpenChange={setIsCreateAccountOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button className="hidden md:block" variant="default">
-                    Sign Up
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Create Account</DialogTitle>
-                  </DialogHeader>
-                  <CreateAccountForm
-                    switchToLogin={handleSwitchToLogin}
-                    onRegistrationSuccess={(email, password) => {
-                      handleLogin(email, password);
-                      setIsCreateAccountOpen(false);
-                    }}
-                  />
-                </DialogContent>
-              </Dialog>
-            </div>
-          ) : (
-            <div className="hidden md:flex items-center gap-3">
+            )}
+            {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <span className="text-gray-700">Hi, {user.firstName}</span>
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {getInitials()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard/profile">Profile</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="text-red-600"
+                  <Button
+                    variant="ghost"
+                    className="flex items-center space-x-2"
                   >
+                    <User className="h-5 w-5" />
+                    <span>Hi, {user.firstName}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem>
+                    <Link href="/profile" className="w-full">
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsLogoutModalOpen(true)}>
                     Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          )}
+            ) : (
+              <div className="flex space-x-4">
+                <Button variant="outline" onClick={() => setIsLoginOpen(true)}>
+                  Login
+                </Button>
+                <Button onClick={() => setIsCreateAccountOpen(true)}>
+                  Sign Up
+                </Button>
+              </div>
+            )}
+          </div>
 
-          <Button
-            className="md:hidden"
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          {/* Mobile Menu Toggle */}
+          <button
+            className="md:hidden text-gray-600 hover:text-primary"
+            onClick={() => setIsOpen(!isOpen)}
           >
             <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
+              className="h-6 w-6"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              viewBox="0 0 24 24"
             >
-              <line x1="4" x2="20" y1="12" y2="12" />
-              <line x1="4" x2="20" y1="6" y2="6" />
-              <line x1="4" x2="20" y1="18" y2="18" />
+              {isOpen ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              )}
             </svg>
-          </Button>
+          </button>
         </div>
-      </div>
 
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t py-4 px-4">
-          {user ? (
-            <>
-              <div className="flex items-center gap-3 py-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    {getInitials()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="font-medium">Welcome, {user.firstName}!</span>
-              </div>
-              <Link
-                href={user.role === "admin" ? "/admin" : "/dashboard"}
-                className="block font-medium text-gray-900 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Dashboard
-              </Link>
-              {user.role === "user" && (
+        {/* Mobile Menu */}
+        {isOpen && (
+          <div className="md:hidden bg-white border-t">
+            <div className="container mx-auto px-4 py-4 flex flex-col space-y-4">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-gray-600 hover:text-primary"
+                  onClick={() => setIsOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              {user && (
+                <Link
+                  href="/cart"
+                  className="text-gray-600 hover:text-primary"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Cart
+                </Link>
+              )}
+              {user ? (
                 <>
-                  {/* Home link removed for logged-in users in mobile menu */}
                   <Link
-                    href="/supplies"
-                    className="block font-medium text-gray-600 py-2 hover:text-primary"
-                    onClick={() => setMobileMenuOpen(false)}
+                    href="/profile"
+                    className="text-gray-600 hover:text-primary"
+                    onClick={() => setIsOpen(false)}
                   >
-                    Supplies
+                    Profile
                   </Link>
-                  <Link
-                    href="/designs"
-                    className="block font-medium text-gray-600 py-2 hover:text-primary"
-                    onClick={() => setMobileMenuOpen(false)}
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setIsLogoutModalOpen(true);
+                      setIsOpen(false);
+                    }}
                   >
-                    Designs
-                  </Link>
-                  <Link
-                    href="/projects"
-                    className="block font-medium text-gray-600 py-2 hover:text-primary"
-                    onClick={() => setMobileMenuOpen(false)}
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsLoginOpen(true);
+                      setIsOpen(false);
+                    }}
                   >
-                    Projects
-                  </Link>
-                  {/* Cart link for mobile */}
-                  <Link
-                    href="/cart"
-                    className="block font-medium text-gray-600 py-2 hover:text-primary"
-                    onClick={() => setMobileMenuOpen(false)}
+                    Login
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsCreateAccountOpen(true);
+                      setIsOpen(false);
+                    }}
                   >
-                    <div className="flex items-center gap-2">
-                      <ShoppingCart className="h-5 w-5" />
-                      <span>Cart</span>
-                    </div>
-                  </Link>
+                    Sign Up
+                  </Button>
                 </>
               )}
-              <Link
-                href="/dashboard/profile"
-                className="block font-medium text-gray-600 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Profile
-              </Link>
-              <Button
-                variant="destructive"
-                onClick={handleLogout}
-                className="mt-2 w-full"
-              >
-                Logout
-              </Button>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/"
-                className="block font-medium text-gray-900 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Home
-              </Link>
-              <Link
-                href="/#about"
-                className="block font-medium text-gray-600 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                About Us
-              </Link>
-              <Link
-                href="/#services"
-                className="block font-medium text-gray-600 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Services
-              </Link>
-              <Link
-                href="/supplies"
-                className="block font-medium text-gray-600 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Supplies
-              </Link>
-              <Link
-                href="/designs"
-                className="block font-medium text-gray-600 py-2 hover:text-primary"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Designs
-              </Link>
-              <Button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setIsLoginOpen(true);
-                }}
-                className="mt-2 w-full"
-              >
-                Login
-              </Button>
-              <Button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setIsCreateAccountOpen(true);
-                }}
-                className="mt-2 w-full"
-                variant="outline"
-              >
-                Sign Up
-              </Button>
-            </>
-          )}
-        </div>
-      )}
-    </header>
+            </div>
+          </div>
+        )}
+      </nav>
+
+      {/* Logout Confirmation Modal */}
+      <Dialog
+        open={isLogoutModalOpen}
+        onOpenChange={(open) => {
+          if (!isLoggingOut) {
+            setIsLogoutModalOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Logout</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to log out of your account?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsLogoutModalOpen(false)}
+              disabled={isLoggingOut}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? "Logging Out..." : "Log Out"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

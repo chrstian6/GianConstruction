@@ -1,7 +1,7 @@
 "use client";
 
 import { CategoryTable } from "@/components/inventory/CategoryTable";
-import { CategoryModal } from "@/components/modals/CategoryModal";
+import { CategoryModal } from "@/components/projects/modals/CategoryModal";
 import { getCategories } from "@/lib/actions/category.actions";
 import { useEffect, useState } from "react";
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,16 +7,15 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
-// Define the LoginFormProps interface
 interface LoginFormProps {
-  switchToSignUp: () => void;
+  switchToCreateAccount: () => void;
   onLogin: (email: string, password: string) => Promise<void>;
   onClose: () => void;
   isLoading: boolean;
 }
 
 export function LoginForm({
-  switchToSignUp,
+  switchToCreateAccount,
   onLogin,
   onClose,
   isLoading,
@@ -131,7 +130,7 @@ export function LoginForm({
         Don't have an account?{" "}
         <button
           type="button"
-          onClick={switchToSignUp}
+          onClick={switchToCreateAccount}
           className="font-medium text-primary hover:underline"
           disabled={isLoading}
         >

@@ -25,9 +25,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { DesignForm } from "@/components/projects/DesignForm";
+import { DesignForm } from "@/components/projects/modals/DesignForm";
 import { Search, Filter, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,13 +37,14 @@ interface Design {
   _id: string;
   title: string;
   description: string;
-  image: string;
+  images: string[];
   category: string;
   style: string;
   sqm: number;
   rooms: number;
   estimatedCost: number;
   isFeatured?: boolean;
+  materials?: { name: string; quantity: number; unitPrice: number }[];
 }
 
 export default function ProjectDesignsPage() {
@@ -52,6 +55,8 @@ export default function ProjectDesignsPage() {
   const [styleFilter, setStyleFilter] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [designToDelete, setDesignToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDesigns = async () => {
@@ -59,14 +64,20 @@ export default function ProjectDesignsPage() {
         const response = await fetch("/api/admin/projects/designs");
         if (response.ok) {
           const data = await response.json();
-          // Ensure designs is always an array
-          setDesigns(Array.isArray(data) ? data : []);
+          console.log("Fetched designs:", data.data);
+          setDesigns(Array.isArray(data.data) ? data.data : []);
         } else {
           throw new Error("Failed to fetch designs");
         }
       } catch (error) {
-        toast.error("Failed to load designs");
-        setDesigns([]); // Set to empty array on error
+        console.error("Fetch error:", error);
+        toast.error("Failed to load designs", {
+          position: "bottom-right",
+          duration: 5000,
+          dismissible: true,
+          richColors: true,
+        });
+        setDesigns([]);
       } finally {
         setLoading(false);
       }
@@ -77,18 +88,37 @@ export default function ProjectDesignsPage() {
   interface FormValues {
     title: string;
     description: string;
-    image: string;
+    images?: string[];
     category: string;
     style: string;
     sqm: number;
     rooms: number;
     estimatedCost: number;
     isFeatured?: boolean;
+    materials?: { name: string; quantity: number; unitPrice: number }[];
   }
 
-  const handleSubmit = async (values: FormValues) => {
+  const handleSubmit: SubmitHandler<FormValues> = async (values) => {
     setIsSubmitting(true);
     try {
+      console.log("Starting design submission:", values);
+
+      // Validate URLs if images are provided
+      if (values.images && values.images.length > 0) {
+        const isValidUrl = (url: string) => {
+          try {
+            new URL(url);
+            return true;
+          } catch {
+            return false;
+          }
+        };
+        const invalidUrls = values.images.filter((url) => !isValidUrl(url));
+        if (invalidUrls.length > 0) {
+          throw new Error(`Invalid image URLs: ${invalidUrls.join(", ")}`);
+        }
+      }
+
       const response = await fetch("/api/admin/projects/designs", {
         method: "POST",
         headers: {
@@ -99,27 +129,75 @@ export default function ProjectDesignsPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("API error:", errorData);
         throw new Error(errorData.error || "Failed to create design");
       }
 
-      const { data: newDesign } = await response.json();
-      // Handle success
+      const result = await response.json();
+      const newDesign = result.data;
+      console.log("Design saved successfully:", newDesign);
+
+      setDesigns((prevDesigns) => [newDesign, ...prevDesigns]);
+      setIsModalOpen(false);
+      toast.success("Design created successfully", {
+        position: "bottom-right",
+        duration: 5000,
+        dismissible: true,
+        richColors: true,
+      });
     } catch (error) {
-      if (error instanceof Error && error.message.includes("timeout")) {
-        toast.error("Request timed out. Please try again.");
-      } else if (
-        error instanceof Error &&
-        error.message.includes("connection")
-      ) {
-        toast.error("Database unavailable. Please try again later.");
-      } else {
-        toast.error(
-          error instanceof Error ? error.message : "An error occurred"
-        );
-      }
+      console.error("Submission error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create design",
+        {
+          position: "bottom-right",
+          duration: 5000,
+          dismissible: true,
+          richColors: true,
+        }
+      );
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await fetch(`/api/admin/projects/designs/${id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setDesigns(designs.filter((design) => design._id !== id));
+        toast.success("Design deleted successfully", {
+          position: "bottom-right",
+          duration: 5000,
+          dismissible: true,
+          richColors: true,
+        });
+      } else {
+        throw new Error("Failed to delete design");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete design",
+        {
+          position: "bottom-right",
+          duration: 5000,
+          dismissible: true,
+          richColors: true,
+        }
+      );
+    } finally {
+      setIsDeleteModalOpen(false);
+      setDesignToDelete(null);
+    }
+  };
+
+  const openDeleteModal = (id: string) => {
+    setDesignToDelete(id);
+    setIsDeleteModalOpen(true);
   };
 
   const filteredDesigns = designs.filter((design) => {
@@ -140,24 +218,6 @@ export default function ProjectDesignsPage() {
   const styles = Array.from(
     new Set(designs.map((design) => design.style).filter(Boolean))
   );
-
-  const handleDelete = async (id: string) => {
-    try {
-      const response = await fetch(`/api/admin/projects/designs/${id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setDesigns(designs.filter((design) => design._id !== id));
-        toast.success("Design deleted successfully");
-      } else {
-        throw new Error("Failed to delete design");
-      }
-    } catch (error) {
-      toast.error("Error deleting design");
-      console.error("Delete error:", error);
-    }
-  };
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -194,7 +254,7 @@ export default function ProjectDesignsPage() {
               Add New Design
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-white/80 backdrop-blur-sm">
             <DialogHeader>
               <DialogTitle>Add New Design</DialogTitle>
             </DialogHeader>
@@ -207,7 +267,6 @@ export default function ProjectDesignsPage() {
         </Dialog>
       </div>
 
-      {/* Search and Filter Section */}
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="relative md:col-span-2">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -262,23 +321,38 @@ export default function ProjectDesignsPage() {
         </Select>
       </div>
 
-      {/* Designs Grid */}
       {filteredDesigns.length > 0 ? (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filteredDesigns.map((design) => (
             <Card
               key={design._id}
-              className="hover:shadow-lg transition-shadow"
+              className="hover:shadow-lg transition-shadow flex flex-col"
             >
               <CardHeader className="p-0">
-                <div className="relative h-48 w-full">
-                  <Image
-                    src={design.image}
-                    alt={design.title}
-                    fill
-                    className="rounded-t-lg object-cover"
-                    priority={false}
-                  />
+                <div className="relative h-48 w-full overflow-hidden">
+                  {design.images && design.images.length > 0 ? (
+                    <div className="flex overflow-x-auto snap-x snap-mandatory">
+                      {design.images.map((image, index) => (
+                        <div
+                          key={index}
+                          className="flex-shrink-0 w-full h-48 snap-center"
+                        >
+                          <Image
+                            src={image}
+                            alt={`${design.title} image ${index + 1}`}
+                            width={400}
+                            height={200}
+                            className="w-full h-full object-cover rounded-t-lg"
+                            priority={index === 0}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="h-full w-full bg-gray-200 flex items-center justify-center rounded-t-lg">
+                      <span className="text-gray-500">No Image Available</span>
+                    </div>
+                  )}
                   {design.isFeatured && (
                     <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
                       Featured
@@ -286,8 +360,8 @@ export default function ProjectDesignsPage() {
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="pt-4">
-                <CardTitle>{design.title}</CardTitle>
+              <CardContent className="pt-4 flex-grow">
+                <CardTitle className="text-lg">{design.title}</CardTitle>
                 <CardDescription className="mt-2 line-clamp-2">
                   {design.description}
                 </CardDescription>
@@ -323,15 +397,49 @@ export default function ProjectDesignsPage() {
                     Create Project
                   </Link>
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => handleDelete(design._id)}
+                <Dialog
+                  open={isDeleteModalOpen}
+                  onOpenChange={setIsDeleteModalOpen}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </Button>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => openDeleteModal(design._id)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-white/80 backdrop-blur-sm">
+                    <DialogHeader>
+                      <DialogTitle>Confirm Deletion</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to delete the design "
+                        {designs.find((d) => d._id === designToDelete)?.title}"?
+                        This action cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsDeleteModalOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() =>
+                          designToDelete && handleDelete(designToDelete)
+                        }
+                        disabled={!designToDelete}
+                      >
+                        Delete
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardFooter>
             </Card>
           ))}
@@ -350,11 +458,9 @@ export default function ProjectDesignsPage() {
               : "Try adjusting your search or filter criteria"}
           </p>
           {designs.length === 0 ? (
-            <Button asChild>
-              <Link href="/admin/projects/designs/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Add New Design
-              </Link>
+            <Button onClick={() => setIsModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add New Design
             </Button>
           ) : (
             <Button variant="outline" onClick={clearFilters}>

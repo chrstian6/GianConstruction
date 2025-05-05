@@ -1,7 +1,42 @@
-// app/api/admin/projects/designs/[id]/route.ts
 import { NextResponse } from "next/server";
 import Design from "@/models/Design";
 import connectDB from "@/lib/db";
+import { z } from "zod";
+
+// Define the material schema for validation
+const materialSchema = z.object({
+  name: z.string().min(1, "Material name is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  unitPrice: z.number().min(0, "Unit price must be positive"),
+});
+
+// Define the update schema for PUT requests
+const updateDesignSchema = z.object({
+  title: z.string().min(1, "Title is required").max(100).optional(),
+  description: z.string().min(1, "Description is required").max(500).optional(),
+  images: z
+    .array(z.string().url("Invalid image URL"))
+    .optional()
+    .nullable(),
+  category: z
+    .enum(["Residential", "Commercial", "Industrial", "Landscape"])
+    .optional(),
+  style: z
+    .enum([
+      "Modern",
+      "Traditional",
+      "Contemporary",
+      "Minimalist",
+      "Industrial",
+      "Rustic",
+    ])
+    .optional(),
+  sqm: z.number().min(10, "Must be at least 10 sqm").optional(),
+  rooms: z.number().min(1, "Must have at least 1 room").optional(),
+  estimatedCost: z.number().min(0, "Cost must be positive").optional(),
+  isFeatured: z.boolean().optional(),
+  materials: z.array(materialSchema).optional().nullable(),
+});
 
 export async function GET(
   req: Request,
@@ -9,12 +44,17 @@ export async function GET(
 ) {
   await connectDB();
   try {
+    if (!params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return NextResponse.json({ error: "Invalid design ID" }, { status: 400 });
+    }
+
     const design = await Design.findById(params.id);
     if (!design) {
       return NextResponse.json({ error: "Design not found" }, { status: 404 });
     }
     return NextResponse.json(design);
   } catch (error) {
+    console.error("GET error:", error);
     return NextResponse.json(
       { error: "Failed to fetch design" },
       { status: 500 }
@@ -28,14 +68,38 @@ export async function PUT(
 ) {
   await connectDB();
   try {
+    if (!params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return NextResponse.json({ error: "Invalid design ID" }, { status: 400 });
+    }
+
     const body = await req.json();
-    const design = await Design.findByIdAndUpdate(params.id, body, {
+
+    // Validate the request body
+    const validatedData = updateDesignSchema.parse(body);
+
+    const design = await Design.findByIdAndUpdate(params.id, validatedData, {
       new: true,
+      runValidators: true,
     });
-    return NextResponse.json(design);
+
+    if (!design) {
+      return NextResponse.json({ error: "Design not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, data: design });
   } catch (error) {
+    console.error("Update error:", error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation failed", details: error.errors },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
-      { error: "Failed to update design" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to update design",
+      },
       { status: 500 }
     );
   }
@@ -47,9 +111,17 @@ export async function DELETE(
 ) {
   await connectDB();
   try {
-    await Design.findByIdAndDelete(params.id);
+    if (!params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return NextResponse.json({ error: "Invalid design ID" }, { status: 400 });
+    }
+
+    const design = await Design.findByIdAndDelete(params.id);
+    if (!design) {
+      return NextResponse.json({ error: "Design not found" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("Delete error:", error);
     return NextResponse.json(
       { error: "Failed to delete design" },
       { status: 500 }

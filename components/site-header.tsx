@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { LogOut, ChevronRight } from "lucide-react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import {
@@ -15,10 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export function SiteHeader() {
   const { logout, user } = useAuth();
-  const router = useRouter();
   const pathname = usePathname();
   const [currentTime, setCurrentTime] = useState<string>("");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -41,9 +41,11 @@ export function SiteHeader() {
         throw new Error("Logout function not available");
       }
       await logout();
+      toast.success("Logged out successfully");
       setShowLogoutModal(false);
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error("SiteHeader: Logout error:", error);
+      toast.error("Failed to log out");
     } finally {
       setIsLoggingOut(false);
     }

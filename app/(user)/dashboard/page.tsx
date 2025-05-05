@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -13,22 +14,34 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-// Dashboard page, now under app/(user)/dashboard to inherit Navbar from app/(user)/layout.tsx
+// Dashboard page under app/(user)/dashboard to inherit Navbar from app/(user)/layout.tsx
 export default function Dashboard() {
-  const { user, isLoading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const router = useRouter();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  // Redirect if not logged in
+  // Redirect if not logged in or if admin
   useEffect(() => {
-    if (isLoading) {
+    if (loading) {
       console.log("Dashboard: Skipping redirect, isLoading=true");
       return;
     }
-    if (!user) {
-      console.log("Dashboard: No user, redirecting to /");
-      router.replace("/");
+    if (!user && !isRedirecting) {
+      console.log("Dashboard: No user, scheduling redirect to /");
+      setIsRedirecting(true);
+      toast.error("Please log in to access the dashboard.");
+      setTimeout(() => {
+        router.replace("/");
+      }, 500); // Delay to allow auth state to settle
+    } else if (isAdmin && !isRedirecting) {
+      console.log("Dashboard: Admin detected, redirecting to /admin");
+      setIsRedirecting(true);
+      toast.error("Access Denied: Admins cannot access user dashboard.");
+      setTimeout(() => {
+        router.replace("/admin");
+      }, 500);
     }
-  }, [user, isLoading, router]);
+  }, [user, loading, isAdmin, router, isRedirecting]);
 
   // Mock data for the dashboard
   const activeProjects = [
@@ -56,7 +69,7 @@ export default function Dashboard() {
     },
   ];
 
-  if (isLoading || !user) {
+  if (loading || !user || isAdmin) {
     return <div className="container mx-auto px-4 py-8">Loading...</div>;
   }
 

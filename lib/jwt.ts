@@ -1,29 +1,53 @@
-// lib/jwt.ts
-import { jwtVerify, SignJWT, type JWTPayload } from "jose";
-import { cookies, headers } from "next/headers";
-import { type NextRequest } from "next/server";
+import { SignJWT, jwtVerify, JWTPayload } from "jose";
+import { cookies } from "next/headers";
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+const secret = new TextEncoder().encode(
+  process.env.JWT_SECRET || "fallback-secret-for-development"
+);
 
-interface UserPayload extends JWTPayload {
+export interface UserPayload extends JWTPayload {
   id: string;
   email: string;
+  firstName: string;
+  lastName: string;
+  contact?: string;
+  gender?: string;
+  address?: string;
   role: string;
-  [key: string]: unknown;
+  isActive: boolean;
+}
+
+export async function generateToken(payload: UserPayload): Promise<string> {
+  try {
+    const token = await new SignJWT(payload)
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1d")
+      .sign(secret);
+    console.log("JWT generated successfully:", token);
+    return token;
+  } catch (error) {
+    console.error("Error generating JWT:", error);
+    throw new Error("Failed to generate token");
+  }
 }
 
 export async function verifyToken(token: string): Promise<UserPayload | null> {
+  if (!token) {
+    console.warn("No token provided for verification");
+    return null;
+  }
+
   try {
     const { payload } = await jwtVerify(token, secret, {
       algorithms: ["HS256"],
-      clockTolerance: 15, // 15 seconds leeway
+      clockTolerance: 15,
     });
-
-    if (!payload.id || !payload.role) {
-      console.error("Token missing required fields");
+    console.log("JWT verified successfully:", payload);
+    if (!payload.id || !payload.email || !payload.role) {
+      console.warn("Invalid JWT payload:", payload);
       return null;
     }
-
     return payload as UserPayload;
   } catch (error) {
     console.error("Token verification failed:", error);
@@ -31,9 +55,12 @@ export async function verifyToken(token: string): Promise<UserPayload | null> {
   }
 }
 
-export async function getAuthUser() {
+export async function getAuthUser(): Promise<UserPayload | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get("app-jwt")?.value;
-  if (!token) return null;
+  const token = cookieStore.get("token")?.value; // Changed from "app-jwt" to "token"
+  if (!token) {
+    console.warn("No token cookie found");
+    return null;
+  }
   return await verifyToken(token);
 }

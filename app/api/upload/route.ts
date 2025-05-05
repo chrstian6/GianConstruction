@@ -12,32 +12,50 @@ export async function POST(request: Request) {
     );
 
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const files = formData.getAll("files") as File[]; // Expect multiple files
 
-    if (!file)
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    if (!files || files.length === 0) {
+      return NextResponse.json({ error: "No files provided" }, { status: 400 });
+    }
 
-    // Upload to Supabase (RLS bypassed)
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
-    const filePath = `uploads/${fileName}`;
+    const uploadedUrls: string[] = [];
 
-    const { data, error } = await supabaseAdmin.storage
-      .from("gianconstruction")
-      .upload(filePath, buffer, {
-        contentType: file.type,
-        upsert: false,
-      });
+    for (const file of files) {
+      // Validate file
+      if (!file || !(file instanceof File)) {
+        return NextResponse.json(
+          { error: "Invalid file provided" },
+          { status: 400 }
+        );
+      }
 
-    if (error) throw error;
+      // Upload to Supabase (RLS bypassed)
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
+      const filePath = `uploads/${fileName}`;
 
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabaseAdmin.storage.from("gianconstruction").getPublicUrl(data.path);
+      const { data, error } = await supabaseAdmin.storage
+        .from("gianconstruction")
+        .upload(filePath, buffer, {
+          contentType: file.type,
+          upsert: false,
+        });
 
-    return NextResponse.json({ success: true, url: publicUrl });
+      if (error) throw error;
+
+      // Get public URL
+      const {
+        data: { publicUrl },
+      } = supabaseAdmin.storage
+        .from("gianconstruction")
+        .getPublicUrl(data.path);
+
+      uploadedUrls.push(publicUrl);
+    }
+
+    return NextResponse.json({ success: true, urls: uploadedUrls });
   } catch (error) {
+    console.error("Upload error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Upload failed" },
       { status: 500 }

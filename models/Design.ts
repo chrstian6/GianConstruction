@@ -1,6 +1,27 @@
 import { Schema, model, models } from "mongoose";
 
-const DesignSchema = new Schema(
+interface IDesign {
+  title: string;
+  description: string;
+  images: string[];
+  category: "Residential" | "Commercial" | "Industrial" | "Landscape";
+  style:
+    | "Modern"
+    | "Traditional"
+    | "Contemporary"
+    | "Minimalist"
+    | "Industrial"
+    | "Rustic";
+  sqm: number;
+  rooms: number;
+  estimatedCost: number;
+  isFeatured?: boolean;
+  projectId?: Schema.Types.ObjectId;
+  createdAt?: Date;
+  materials?: { name: string; quantity: number; unitPrice: number }[];
+}
+
+const DesignSchema = new Schema<IDesign>(
   {
     title: {
       type: String,
@@ -14,14 +35,22 @@ const DesignSchema = new Schema(
       trim: true,
       maxlength: [500, "Description cannot exceed 500 characters"],
     },
-    image: {
-      type: String,
-      required: [true, "Image URL is required"],
+    images: {
+      type: [String],
+      required: false,
       validate: {
-        validator: (v: string) => {
-          return v.startsWith("https://") || v.startsWith("/images/");
-        },
-        message: "Image must be a valid URL",
+        validator: (v: string[]) =>
+          !v ||
+          (Array.isArray(v) &&
+            v.every((url) => {
+              try {
+                new URL(url);
+                return true;
+              } catch {
+                return false;
+              }
+            })),
+        message: "All provided image URLs must be valid",
       },
     },
     category: {
@@ -31,6 +60,7 @@ const DesignSchema = new Schema(
         values: ["Residential", "Commercial", "Industrial", "Landscape"],
         message: "{VALUE} is not a valid category",
       },
+      trim: true,
     },
     style: {
       type: String,
@@ -46,6 +76,7 @@ const DesignSchema = new Schema(
         ],
         message: "{VALUE} is not a valid style",
       },
+      trim: true,
     },
     sqm: {
       type: Number,
@@ -75,9 +106,27 @@ const DesignSchema = new Schema(
       type: Date,
       default: Date.now,
     },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
+    materials: {
+      type: [
+        {
+          name: {
+            type: String,
+            required: [true, "Material name is required"],
+            trim: true,
+          },
+          quantity: {
+            type: Number,
+            required: [true, "Quantity is required"],
+            min: [1, "Quantity must be at least 1"],
+          },
+          unitPrice: {
+            type: Number,
+            required: [true, "Unit price is required"],
+            min: [0, "Unit price must be positive"],
+          },
+        },
+      ],
+      required: false,
     },
   },
   {
@@ -85,7 +134,9 @@ const DesignSchema = new Schema(
   }
 );
 
+// Define indexes
+DesignSchema.index({ projectId: 1 }, { sparse: true });
+
 const Design = models.Design || model("Design", DesignSchema);
 
 export default Design;
-    

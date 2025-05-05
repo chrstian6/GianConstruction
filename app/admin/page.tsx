@@ -1,4 +1,7 @@
-// app/admin/page.tsx
+"use client";
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Building,
   Calendar,
@@ -12,6 +15,73 @@ import {
 } from "lucide-react";
 
 export default function AdminDashboard() {
+  const { user, isAdmin, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  console.log("AdminDashboard: State:", {
+    user: user?.email,
+    isAdmin,
+    loading,
+    pathname,
+  });
+
+  useEffect(() => {
+    if (!loading && !user && !pathname.startsWith("/admin")) {
+      console.log("AdminDashboard: No user detected, redirecting to /");
+      router.push("/");
+    }
+  }, [loading, user, router, pathname]);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8 space-y-6">
+        {/* Skeleton for Header */}
+        <div className="mb-6">
+          <div className="h-8 w-1/4 bg-gray-200 animate-pulse rounded mb-2"></div>
+          <div className="h-4 w-1/2 bg-gray-200 animate-pulse rounded"></div>
+        </div>
+        {/* Skeleton for Stats Grid */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((_, index) => (
+            <StatCardSkeleton key={index} />
+          ))}
+        </div>
+        {/* Skeleton for Alerts Section */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {[1, 2].map((_, index) => (
+            <AlertCardSkeleton key={index} />
+          ))}
+        </div>
+        {/* Skeleton for Projects Section */}
+        <div>
+          <div className="flex items-center justify-between mt-6">
+            <div className="h-6 w-1/4 bg-gray-200 animate-pulse rounded"></div>
+            <div className="h-4 w-16 bg-gray-200 animate-pulse rounded"></div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((_, index) => (
+              <ProjectCardSkeleton key={index} />
+            ))}
+          </div>
+        </div>
+        {/* Skeleton for Charts Section */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {[1, 2].map((_, index) => (
+            <ChartCardSkeleton key={index} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    console.log(
+      "AdminDashboard: Non-admin detected, relying on layout redirect"
+    );
+    return null; // Middleware and layout should handle redirection
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -185,7 +255,7 @@ function ChartCardSkeleton() {
   );
 }
 
-// Component Definitions (can be moved to separate files if preferred)
+// Component Definitions
 function StatCard({
   title,
   value,

@@ -1,86 +1,160 @@
 "use client";
-import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Poppins } from "next/font/google";
 import Image from "next/image";
-import { useState } from "react";
 import OtpVerificationModal from "@/components/otp-verification-modal";
 import { LoginForm } from "@/components/login-form";
 import CreateAccountForm from "@/components/create-account-form";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModal } from "@/contexts/ModalContext";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
-const poppins = Poppins({
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
-  display: "swap",
-});
-
 export default function Home() {
   const [showOtpModal, setShowOtpModal] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
+  const { login, loading, user } = useAuth();
+  const {
+    isLoginOpen,
+    setIsLoginOpen,
+    isCreateAccountOpen,
+    setIsCreateAccountOpen,
+  } = useModal();
 
-  // Redirect admins to /admin
-  useEffect(() => {
-    if (isLoading) {
-      console.log("Home: Skipping redirect, isLoading=true");
-      return;
-    }
-    if (user && user.role === "admin" && pathname !== "/admin") {
-      console.log(
-        "Home: Admin user detected, redirecting to /admin, current path:",
-        pathname
-      );
-      router.replace("/admin");
-    }
-  }, [user, isLoading, router, pathname]);
-
-  // Function to open the login modal
   const openLoginModal = () => {
-    setShowLoginModal(true);
-    setShowCreateAccountModal(false);
+    setIsLoginOpen(true);
+    setIsCreateAccountOpen(false);
   };
 
-  // Function to open the create account modal
   const openCreateAccountModal = () => {
-    setShowLoginModal(false);
-    setShowCreateAccountModal(true);
+    setIsLoginOpen(false);
+    setIsCreateAccountOpen(true);
   };
 
-  // Function to close all modals
   const closeAllModals = () => {
-    setShowLoginModal(false);
-    setShowCreateAccountModal(false);
+    setIsLoginOpen(false);
+    setIsCreateAccountOpen(false);
     setShowOtpModal(false);
   };
 
-  // Handle successful registration
-  const handleRegistrationSuccess = (email: string, password: string) => {
+  const handleRegistrationSuccess = (email: string) => {
     setUserEmail(email);
     setShowOtpModal(true);
-    setShowCreateAccountModal(false);
+    setIsCreateAccountOpen(false);
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {/* Skeleton for Hero Section */}
+        <section className="relative bg-gradient-to-r from-gray-50 to-gray-100 py-20 md:py-32">
+          <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
+            <div className="md:w-1/2 mb-12 md:mb-0">
+              <div className="h-12 w-3/4 bg-gray-200 animate-pulse rounded mb-6"></div>
+              <div className="h-6 w-full bg-gray-200 animate-pulse rounded mb-4"></div>
+              <div className="h-6 w-5/6 bg-gray-200 animate-pulse rounded mb-8"></div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="h-10 w-32 bg-gray-200 animate-pulse rounded"></div>
+                <div className="h-10 w-32 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+            </div>
+            <div className="md:w-1/2 flex justify-center">
+              <div className="relative w-full max-w-lg aspect-square bg-gray-200 animate-pulse rounded-xl"></div>
+            </div>
+          </div>
+        </section>
+
+        {/* Skeleton for Services Section */}
+        <section className="py-20 bg-white">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <div className="h-8 w-1/4 mx-auto bg-gray-200 animate-pulse rounded mb-4"></div>
+              <div className="h-6 w-1/2 mx-auto bg-gray-200 animate-pulse rounded"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[1, 2, 3].map((_, index) => (
+                <div key={index} className="bg-gray-50 p-8 rounded-xl">
+                  <div className="w-12 h-12 bg-gray-200 animate-pulse rounded-full mb-6"></div>
+                  <div className="h-6 w-3/4 bg-gray-200 animate-pulse rounded mb-3"></div>
+                  <div className="h-4 w-full bg-gray-200 animate-pulse rounded"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Skeleton for About Section */}
+        <section className="py-20 bg-gray-50">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col md:flex-row items-center gap-12">
+              <div className="md:w-1/2">
+                <div className="relative w-full h-96 bg-gray-200 animate-pulse rounded-xl"></div>
+              </div>
+              <div className="md:w-1/2">
+                <div className="h-8 w-1/2 bg-gray-200 animate-pulse rounded mb-6"></div>
+                <div className="h-4 w-full bg-gray-200 animate-pulse rounded mb-4"></div>
+                <div className="h-4 w-5/6 bg-gray-200 animate-pulse rounded mb-6"></div>
+                {[1, 2, 3].map((_, index) => (
+                  <div key={index} className="flex items-start mb-4">
+                    <div className="h-5 w-5 bg-gray-200 animate-pulse rounded mr-3"></div>
+                    <div className="h-4 w-3/4 bg-gray-200 animate-pulse rounded"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Skeleton for CTA Section */}
+        <section className="py-20 bg-primary/5">
+          <div className="container mx-auto px-4 text-center">
+            <div className="h-8 w-1/3 mx-auto bg-gray-200 animate-pulse rounded mb-6"></div>
+            <div className="h-6 w-2/3 mx-auto bg-gray-200 animate-pulse rounded mb-8"></div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+              <div className="h-10 w-3/4 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-10 w-1/4 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </div>
+        </section>
+
+        {/* Skeleton for Footer */}
+        <footer className="bg-gray-900 py-12">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <div>
+                <div className="h-10 w-32 bg-gray-200 animate-pulse rounded mb-4"></div>
+                <div className="h-4 w-full bg-gray-200 animate-pulse rounded mb-2"></div>
+                <div className="h-4 w-5/6 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+              {[1, 2, 3].map((_, index) => (
+                <div key={index}>
+                  <div className="h-6 w-1/2 bg-gray-200 animate-pulse rounded mb-4"></div>
+                  {[1, 2, 3, 4].map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-4 w-3/4 bg-gray-200 animate-pulse rounded mb-2"
+                    ></div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-gray-800 mt-12 pt-8 text-center">
+              <div className="h-4 w-1/3 mx-auto bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    );
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${poppins.className}`}>
+    <div className="min-h-screen flex flex-col">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-gray-50 to-gray-100 py-20 md:py-32">
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
@@ -446,16 +520,25 @@ export default function Home() {
         </div>
       </footer>
 
+      {/* Login Modal */}
+      <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <VisuallyHidden>
+              <DialogTitle>Login</DialogTitle>
+            </VisuallyHidden>
+          </DialogHeader>
+          <LoginForm
+            switchToCreateAccount={openCreateAccountModal}
+            onLogin={login}
+            onClose={closeAllModals}
+            isLoading={loading}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Create Account Modal */}
-      <Dialog
-        open={showCreateAccountModal}
-        onOpenChange={(open) => {
-          setShowCreateAccountModal(open);
-          if (!open) {
-            setShowCreateAccountModal(false);
-          }
-        }}
-      >
+      <Dialog open={isCreateAccountOpen} onOpenChange={setIsCreateAccountOpen}>
         <DialogContent>
           <DialogHeader>
             <VisuallyHidden>
@@ -463,10 +546,7 @@ export default function Home() {
             </VisuallyHidden>
           </DialogHeader>
           <CreateAccountForm
-            switchToLogin={() => {
-              setShowCreateAccountModal(false);
-              setShowLoginModal(true);
-            }}
+            switchToLogin={openLoginModal}
             onRegistrationSuccess={handleRegistrationSuccess}
           />
         </DialogContent>
@@ -477,9 +557,7 @@ export default function Home() {
         isOpen={showOtpModal}
         onClose={() => setShowOtpModal(false)}
         email={userEmail}
-        onSuccess={() => {
-          closeAllModals();
-        }}
+        onSuccess={closeAllModals}
         onResend={async () => {
           // Your resend OTP logic
         }}

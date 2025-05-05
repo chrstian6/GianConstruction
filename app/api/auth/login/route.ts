@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import User from "@/models/user";
 import connectDB from "@/lib/db";
-import { SignJWT } from "jose";
 import { cookies } from "next/headers";
+import { generateToken, UserPayload } from "@/lib/jwt";
 
 const loginAttempts = new Map<
   string,
@@ -69,9 +69,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Token generation with proper encoding
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const tokenPayload = {
+    // Token generation
+    const tokenPayload: UserPayload = {
       id: user._id.toString(),
       email: user.email,
       firstName: user.firstName,
@@ -83,16 +82,14 @@ export async function POST(req: Request) {
       isActive: user.isActive,
     };
 
-    const token = await new SignJWT(tokenPayload)
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("1d")
-      .sign(secret);
+    const token = await generateToken(tokenPayload);
 
-    // Response with both user data and token
+    // Response with user data and token
     const response = NextResponse.json({
-      user: tokenPayload,
-      token: token,
+      user: {
+        ...tokenPayload,
+        token,
+      },
       isAdmin: user.role === "admin",
       redirectTo: user.role === "admin" ? "/admin" : null,
     });
@@ -111,11 +108,10 @@ export async function POST(req: Request) {
     loginAttempts.delete(email);
     return response;
   } catch (error) {
+    console.error("Login error:", error);
     return NextResponse.json(
       { error: "An unexpected error occurred. Please try again." },
       { status: 500 }
     );
   }
 }
-
-
