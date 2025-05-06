@@ -11,6 +11,11 @@ export async function GET() {
     const cookieStore = await cookies();
     const token = cookieStore.get("token")?.value;
 
+    console.log(
+      "verify/route: Processing verification, token:",
+      token ? "present" : "absent"
+    );
+
     if (!token) {
       console.warn("verify/route: No token cookie found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,6 +26,8 @@ export async function GET() {
       console.warn("verify/route: Invalid token");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    console.log("verify/route: Token verified, payload:", payload);
 
     const user = await User.findOne({ _id: payload.id, isActive: true }).select(
       "-password"

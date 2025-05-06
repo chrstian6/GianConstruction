@@ -3,55 +3,41 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import OtpVerificationModal from "@/components/otp-verification-modal";
-import { LoginForm } from "@/components/login-form";
-import CreateAccountForm from "@/components/create-account-form";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
-import { useModal } from "@/contexts/ModalContext";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { motion } from "framer-motion";
+
+// Dynamically import Spline with SSR disabled
+const Spline = dynamic(() => import("@splinetool/react-spline"), {
+  ssr: false,
+});
+
+// Animation variants for scroll reveal
+const sectionVariants = {
+  hidden: { opacity: 0, y: 50 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: "easeOut" },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, scale: 0.8 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
+};
 
 export default function Home() {
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
-  const { login, loading, user } = useAuth();
-  const {
-    isLoginOpen,
-    setIsLoginOpen,
-    isCreateAccountOpen,
-    setIsCreateAccountOpen,
-  } = useModal();
-
-  const openLoginModal = () => {
-    setIsLoginOpen(true);
-    setIsCreateAccountOpen(false);
-  };
-
-  const openCreateAccountModal = () => {
-    setIsLoginOpen(false);
-    setIsCreateAccountOpen(true);
-  };
-
-  const closeAllModals = () => {
-    setIsLoginOpen(false);
-    setIsCreateAccountOpen(false);
-    setShowOtpModal(false);
-  };
-
-  const handleRegistrationSuccess = (email: string) => {
-    setUserEmail(email);
-    setShowOtpModal(true);
-    setIsCreateAccountOpen(false);
-  };
+  const [isSplineLoaded, setIsSplineLoaded] = useState(false);
+  const { loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col ">
         {/* Skeleton for Hero Section */}
         <section className="relative bg-gradient-to-r from-gray-50 to-gray-100 py-20 md:py-32">
           <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
@@ -154,52 +140,90 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-gray-50 to-gray-100 py-20 md:py-32">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center">
+    <div className="min-h-screen flex flex-col pt-16">
+      {/* Hero Section with Spline */}
+      <motion.section
+        className="relative bg-gradient-to-r from-gray-50 to-gray-100 py-20 md:py-32 overflow-hidden"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+      >
+        <div className="relative z-10 container mx-auto px-4 flex flex-col md:flex-row items-center">
           <div className="md:w-1/2 mb-12 md:mb-0">
-            <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-6 text-gray-900">
+            <motion.h1
+              className="text-4xl md:text-5xl font-bold leading-tight mb-6 text-gray-900"
+              variants={cardVariants}
+            >
               Building Your Dream <span className="text-primary">Space</span>
-            </h1>
-            <p className="text-lg text-gray-600 mb-8 max-w-lg">
+            </motion.h1>
+            <motion.p
+              className="text-lg text-gray-600 mb-8 max-w-lg"
+              variants={cardVariants}
+            >
               Gian Construction delivers exceptional quality and craftsmanship
               for residential and commercial projects. Our team brings your
               vision to life.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button size="lg" className="w-full sm:w-auto">
+            </motion.p>
+            <motion.div
+              className="flex flex-col sm:flex-row gap-4"
+              variants={cardVariants}
+            >
+              <Button size="lg" className="w-full sm:w-auto bg-primary">
                 Get a Free Quote
               </Button>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full sm:w-auto border-primary text-primary hover:bg-primary hover:text-white"
+              >
                 View Projects
               </Button>
-            </div>
+            </motion.div>
           </div>
-          <div className="md:w-1/2 flex justify-center">
+          <motion.div
+            className="md:w-1/2 flex justify-center"
+            variants={cardVariants}
+          >
             <div className="relative w-full max-w-lg aspect-square rounded-xl overflow-hidden shadow-xl">
-              <Image
-                src="/images/gianhero.jpg"
-                alt="Construction Site"
-                fill
-                className="object-cover"
-                priority
+              <Spline
+                scene="https://prod.spline.design/t5aa2zpnaCaHsdDi/scene.splinecode"
+                className="w-full h-full"
+                onLoad={() => setIsSplineLoaded(true)}
               />
+              {!isSplineLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white opacity-80">
+                  Loading...
+                </div>
+              )}
             </div>
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Services Section */}
-      <section id="services" className="py-20 bg-white">
+      <motion.section
+        id="services"
+        className="py-20 bg-white"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4 text-gray-900">
+            <motion.h2
+              className="text-3xl font-bold mb-4 text-gray-900"
+              variants={cardVariants}
+            >
               Our Services
-            </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            </motion.h2>
+            <motion.p
+              className="text-gray-600 max-w-2xl mx-auto"
+              variants={cardVariants}
+            >
               Comprehensive construction solutions tailored to your needs
-            </p>
+            </motion.p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
@@ -270,9 +294,14 @@ export default function Home() {
                 ),
               },
             ].map((service, index) => (
-              <div
+              <motion.div
                 key={index}
                 className="bg-gray-50 p-8 rounded-xl hover:shadow-md transition-shadow"
+                variants={cardVariants}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
               >
                 <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-6">
                   {service.icon}
@@ -281,17 +310,24 @@ export default function Home() {
                   {service.title}
                 </h3>
                 <p className="text-gray-600">{service.description}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* About Section */}
-      <section id="about" className="py-20 bg-gray-50">
+      <motion.section
+        id="about"
+        className="py-20 bg-gray-50"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center gap-12">
-            <div className="md:w-1/2">
+            <motion.div className="md:w-1/2" variants={cardVariants}>
               <div className="relative w-full h-96 rounded-xl overflow-hidden shadow-lg">
                 <Image
                   src="/images/about-us.jpg"
@@ -300,8 +336,8 @@ export default function Home() {
                   className="object-cover"
                 />
               </div>
-            </div>
-            <div className="md:w-1/2">
+            </motion.div>
+            <motion.div className="md:w-1/2" variants={cardVariants}>
               <h2 className="text-3xl font-bold mb-6 text-gray-900">
                 About Gian Construction
               </h2>
@@ -316,105 +352,104 @@ export default function Home() {
                 standards of quality and safety.
               </p>
               <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 mt-1">
-                    <svg
-                      className="h-5 w-5 text-primary"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-600">
-                    <span className="font-medium text-gray-900">15+ Years</span>{" "}
-                    of industry experience
-                  </p>
-                </div>
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 mt-1">
-                    <svg
-                      className="h-5 w-5 text-primary"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-600">
-                    <span className="font-medium text-gray-900">
-                      100+ Projects
-                    </span>{" "}
-                    completed successfully
-                  </p>
-                </div>
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 mt-1">
-                    <svg
-                      className="h-5 w-5 text-primary"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-600">
-                    <span className="font-medium text-gray-900">
-                      Certified Professionals
-                    </span>{" "}
-                    on our team
-                  </p>
-                </div>
+                {[
+                  {
+                    highlight: "15+ Years",
+                    text: "of industry experience",
+                  },
+                  {
+                    highlight: "100+ Projects",
+                    text: "completed successfully",
+                  },
+                  {
+                    highlight: "Certified Professionals",
+                    text: "on our team",
+                  },
+                ].map((item, index) => (
+                  <motion.div
+                    key={index}
+                    className="flex items-start"
+                    variants={cardVariants}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <div className="flex-shrink-0 mt-1">
+                      <svg
+                        className="h-5 w-5 text-primary"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    </div>
+                    <p className="ml-3 text-gray-600">
+                      <span className="font-medium text-gray-900">
+                        {item.highlight}
+                      </span>{" "}
+                      {item.text}
+                    </p>
+                  </motion.div>
+                ))}
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-primary/5">
+      <motion.section
+        className="py-20 bg-primary/5"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-6 text-gray-900">
+          <motion.h2
+            className="text-3xl font-bold mb-6 text-gray-900"
+            variants={cardVariants}
+          >
             Ready to Start Your Project?
-          </h2>
-          <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
+          </motion.h2>
+          <motion.p
+            className="text-gray-600 mb-8 max-w-2xl mx-auto"
+            variants={cardVariants}
+          >
             Contact us today for a free consultation and estimate. Our team is
             ready to bring your construction vision to life.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+          </motion.p>
+          <motion.div
+            className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto"
+            variants={cardVariants}
+          >
             <Input
               type="email"
               placeholder="Enter your email"
               className="bg-white"
             />
-            <Button className="whitespace-nowrap">Get Started</Button>
-          </div>
+            <Button className="whitespace-nowrap bg-primary">
+              Get Started
+            </Button>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <motion.footer
+        className="bg-gray-900 text-white py-12"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
+            <motion.div variants={cardVariants}>
               <Image
                 src="/logo-white.png"
                 alt="Gian Construction"
@@ -426,82 +461,62 @@ export default function Home() {
                 Building excellence since 2010. Quality construction services
                 for residential and commercial clients.
               </p>
-            </div>
-            <div>
+            </motion.div>
+            <motion.div variants={cardVariants}>
               <h4 className="font-semibold text-lg mb-4">Quick Links</h4>
               <ul className="space-y-2">
-                <li>
-                  <a
-                    href="/"
-                    className="text-gray-400 hover:text-white transition-colors"
+                {[
+                  { href: "/", label: "Home" },
+                  { href: "/#about", label: "About Us" },
+                  { href: "/#services", label: "Services" },
+                  { href: "/projects", label: "Projects" },
+                ].map((link, index) => (
+                  <motion.li
+                    key={index}
+                    variants={cardVariants}
+                    transition={{ delay: index * 0.1 }}
                   >
-                    Home
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/#about"
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    About Us
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/#services"
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    Services
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/projects"
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    Projects
-                  </a>
-                </li>
+                    <a
+                      href={link.href}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      {link.label}
+                    </a>
+                  </motion.li>
+                ))}
               </ul>
-            </div>
-            <div>
+            </motion.div>
+            <motion.div variants={cardVariants}>
               <h4 className="font-semibold text-lg mb-4">Services</h4>
               <ul className="space-y-2">
-                <li>
-                  <a
-                    href="/services/residential"
-                    className="text-gray-400 hover:text-white transition-colors"
+                {[
+                  {
+                    href: "/services/residential",
+                    label: "Residential Construction",
+                  },
+                  {
+                    href: "/services/commercial",
+                    label: "Commercial Construction",
+                  },
+                  { href: "/services/renovations", label: "Renovations" },
+                  { href: "/services/design", label: "Design Services" },
+                ].map((link, index) => (
+                  <motion.li
+                    key={index}
+                    variants={cardVariants}
+                    transition={{ delay: index * 0.1 }}
                   >
-                    Residential Construction
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/services/commercial"
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    Commercial Construction
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/services/renovations"
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    Renovations
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/services/design"
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    Design Services
-                  </a>
-                </li>
+                    <a
+                      href={link.href}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      {link.label}
+                    </a>
+                  </motion.li>
+                ))}
               </ul>
-            </div>
-            <div>
+            </motion.div>
+            <motion.div variants={cardVariants}>
               <h4 className="font-semibold text-lg mb-4">Contact Us</h4>
               <address className="not-italic text-gray-400">
                 <p className="mb-2">Sola St. Barangay 2</p>
@@ -509,60 +524,19 @@ export default function Home() {
                 <p className="mb-2">Phone: (+63) 945-963-3742</p>
                 <p className="mb-2">Email: info@gianconstruction.com</p>
               </address>
-            </div>
+            </motion.div>
           </div>
-          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-500">
+          <motion.div
+            className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-500"
+            variants={cardVariants}
+          >
             <p>
               © {new Date().getFullYear()} Gian Construction. All rights
               reserved.
             </p>
-          </div>
+          </motion.div>
         </div>
-      </footer>
-
-      {/* Login Modal */}
-      <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <VisuallyHidden>
-              <DialogTitle>Login</DialogTitle>
-            </VisuallyHidden>
-          </DialogHeader>
-          <LoginForm
-            switchToCreateAccount={openCreateAccountModal}
-            onLogin={login}
-            onClose={closeAllModals}
-            isLoading={loading}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Account Modal */}
-      <Dialog open={isCreateAccountOpen} onOpenChange={setIsCreateAccountOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <VisuallyHidden>
-              <DialogTitle>Create Account</DialogTitle>
-            </VisuallyHidden>
-          </DialogHeader>
-          <CreateAccountForm
-            switchToLogin={openLoginModal}
-            onRegistrationSuccess={handleRegistrationSuccess}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* OTP Verification Modal */}
-      <OtpVerificationModal
-        isOpen={showOtpModal}
-        onClose={() => setShowOtpModal(false)}
-        email={userEmail}
-        onSuccess={closeAllModals}
-        onResend={async () => {
-          // Your resend OTP logic
-        }}
-        openLoginModal={openLoginModal}
-      />
+      </motion.footer>
     </div>
   );
 }

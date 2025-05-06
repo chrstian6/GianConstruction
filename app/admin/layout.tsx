@@ -1,18 +1,18 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { SiteHeader } from "@/components/site-header";
-import { verifyToken } from "@/lib/jwt";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { Toaster } from "sonner";
 
-export default async function AdminLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   console.log("AdminLayout: Rendering for admin routes");
+
   return (
     <SidebarProvider>
       <div

@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname }: { pathname: string } = request.nextUrl;
 
   console.log(
-    "Middleware: Path:",
+    "Middleware: Processing request - Path:",
     pathname,
     "Token:",
     token ? "present" : "absent"
@@ -24,6 +24,21 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         const redirectUrl = new URL("/", request.url);
         redirectUrl.searchParams.set("nocache", Date.now().toString());
         return NextResponse.redirect(redirectUrl);
+      }
+
+      // Early return if already on correct route
+      if (payload.role === "admin" && pathname === "/admin") {
+        console.log("Middleware: Admin already on /admin, allowing access");
+        return NextResponse.next();
+      }
+      if (
+        payload.role === "user" &&
+        (pathname === "/dashboard" ||
+          pathname.startsWith("/profile") ||
+          pathname.startsWith("/cart"))
+      ) {
+        console.log("Middleware: User already on user route, allowing access");
+        return NextResponse.next();
       }
 
       // Prevent authenticated users from accessing home page
@@ -83,7 +98,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       redirectUrl.searchParams.set("nocache", Date.now().toString());
       return NextResponse.redirect(redirectUrl);
     }
-    // Allow public access to /, /designs, /supplies, /about, /services
     console.log("Middleware: Public route, allowing access");
   }
 

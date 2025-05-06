@@ -33,24 +33,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false); // Pause verifyUser during logout
-  const [postLogout, setPostLogout] = useState(false); // Skip cache post-logout
-  const [loginCompleted, setLoginCompleted] = useState(false); // Lock user state post-login
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [postLogout, setPostLogout] = useState(false);
+  const [loginCompleted, setLoginCompleted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const userCache = useRef<User | null>(null); // Cache to reduce /api/auth/verify calls
-  const isVerifying = useRef(false); // Prevent concurrent verifyUser calls
-  const logoutPromise = useRef<Promise<void> | null>(null); // Track logout promise
-  const lastVerifyTime = useRef<number>(0); // Debounce verifyUser calls
+  const userCache = useRef<User | null>(null);
+  const isVerifying = useRef(false);
+  const isMounted = useRef(false);
+  const logoutPromise = useRef<Promise<void> | null>(null);
+  const lastVerifyTime = useRef<number>(0);
+
+  // Utility to clear browser history
+  const clearHistory = (path: string) => {
+    if (typeof window !== "undefined") {
+      for (let i = 0; i < 100; i++) {
+        window.history.pushState(null, "", path);
+      }
+      window.history.replaceState(null, "", path);
+      window.history.scrollRestoration = "manual";
+      window.onpopstate = () => {
+        window.location.href = path;
+      };
+    }
+  };
 
   const verifyUser = useCallback(async () => {
-    // Skip if logging out or logout is in progress
-    if (isLoggingOut || logoutPromise.current) {
+    // Skip if logging out, post-logout, or logout in progress
+    if (isLoggingOut || postLogout || logoutPromise.current) {
       console.log(
-        `AuthContext: Skipping verifyUser (isLoggingOut: ${isLoggingOut}, logoutPromise: ${!!logoutPromise.current})`
+        `AuthContext: Skipping verifyUser (isLoggingOut: ${isLoggingOut}, postLogout: ${postLogout}, logoutPromise: ${!!logoutPromise.current})`
       );
       if (logoutPromise.current) {
-        await logoutPromise.current; // Wait for logout to complete
+        await logoutPromise.current;
       }
       return;
     }
@@ -61,24 +76,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Debounce: Skip if called within 2000ms
+    // Debounce: Skip if called within 500ms
     const now = Date.now();
-    if (now - lastVerifyTime.current < 2000) {
+    if (now - lastVerifyTime.current < 500) {
       console.log("AuthContext: Skipping verifyUser (debounced)");
       return;
     }
     lastVerifyTime.current = now;
 
-    console.log("AuthContext: Verifying user, pathname:", pathname);
+    console.log("AuthContext: Executing verifyUser, pathname:", pathname);
     isVerifying.current = true;
 
     try {
-      // Use cached user if available and not post-logout
-      if (userCache.current && !postLogout) {
+      // Use cached user if available
+      if (userCache.current) {
         console.log("AuthContext: Using cached user:", userCache.current);
         if (!user || !loginCompleted) {
           setUser(userCache.current);
           setIsAdmin(userCache.current?.role === "admin");
+        }
+        // Skip redirect if on correct route
+        if (
+          (userCache.current?.role === "admin" && pathname === "/admin") ||
+          (userCache.current?.role === "user" &&
+            (pathname === "/dashboard" ||
+              pathname.startsWith("/profile") ||
+              pathname.startsWith("/cart")))
+        ) {
+          console.log(
+            "AuthContext: Already on correct route, skipping redirect"
+          );
+          setLoading(false);
+          return;
         }
         // Protect routes
         if (
@@ -89,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "AuthContext: Non-admin on /admin route, redirecting to /"
           );
           toast.error("Access Denied: Admin routes are restricted.");
-          router.replace("/"); // Replace to clear history
+          window.location.href = "/";
         } else if (
           userCache.current?.role === "admin" &&
           (pathname.startsWith("/dashboard") ||
@@ -100,13 +129,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "AuthContext: Admin on user route, redirecting to /admin"
           );
           toast.error("Access Denied: Admins cannot access user routes.");
-          router.replace("/admin"); // Replace to clear history
+          window.location.href = "/admin";
         } else if (pathname === "/" && userCache.current?.role === "user") {
           console.log("AuthContext: User on /, redirecting to /dashboard");
-          router.replace("/dashboard"); // Replace to clear history
+          window.location.href = "/dashboard";
         } else if (pathname === "/" && userCache.current?.role === "admin") {
           console.log("AuthContext: Admin on /, redirecting to /admin");
-          router.replace("/admin"); // Replace to clear history
+          window.location.href = "/admin";
         }
         setLoading(false);
         return;
@@ -119,16 +148,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         console.log("AuthContext: Verification successful, user:", data.user);
         setUser(data.user);
-        userCache.current = data.user; // Cache user
-        setPostLogout(false); // Reset post-logout flag
+        userCache.current = data.user;
+        setPostLogout(false);
         setIsAdmin(data.user?.role === "admin");
+        // Skip redirect if on correct route
+        if (
+          (data.user?.role === "admin" && pathname === "/admin") ||
+          (data.user?.role === "user" &&
+            (pathname === "/dashboard" ||
+              pathname.startsWith("/profile") ||
+              pathname.startsWith("/cart")))
+        ) {
+          console.log(
+            "AuthContext: Already on correct route, skipping redirect"
+          );
+          setLoading(false);
+          return;
+        }
         // Protect routes
         if (pathname.startsWith("/admin") && data.user?.role !== "admin") {
           console.log(
             "AuthContext: Non-admin on /admin route, redirecting to /"
           );
           toast.error("Access Denied: Admin routes are restricted.");
-          router.replace("/"); // Replace to clear history
+          window.location.href = "/";
         } else if (
           data.user?.role === "admin" &&
           (pathname.startsWith("/dashboard") ||
@@ -139,13 +182,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "AuthContext: Admin on user route, redirecting to /admin"
           );
           toast.error("Access Denied: Admins cannot access user routes.");
-          router.replace("/admin"); // Replace to clear history
+          window.location.href = "/admin";
         } else if (pathname === "/" && data.user?.role === "user") {
           console.log("AuthContext: User on /, redirecting to /dashboard");
-          router.replace("/dashboard"); // Replace to clear history
+          window.location.href = "/dashboard";
         } else if (pathname === "/" && data.user?.role === "admin") {
           console.log("AuthContext: Admin on /, redirecting to /admin");
-          router.replace("/admin"); // Replace to clear history
+          window.location.href = "/admin";
         }
       } else {
         console.log("AuthContext: Unauthorized, clearing user state");
@@ -153,10 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
           setIsAdmin(false);
           userCache.current = null;
-          setPostLogout(true); // Set post-logout flag
-          // No toast for failed verification to avoid confusion
+          setPostLogout(true);
         }
-        // Redirect from protected routes
         if (
           pathname.startsWith("/admin") ||
           pathname.startsWith("/dashboard") ||
@@ -166,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log(
             "AuthContext: Unauthenticated on protected route, redirecting to /"
           );
-          router.replace("/"); // Replace to clear history
+          window.location.href = "/";
         }
       }
     } catch (error) {
@@ -175,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setIsAdmin(false);
         userCache.current = null;
-        setPostLogout(true); // Set post-logout flag
+        setPostLogout(true);
         toast.error("Authentication error. Please try again.");
       }
       if (
@@ -187,16 +228,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log(
           "AuthContext: Unauthenticated on protected route, redirecting to /"
         );
-        router.replace("/"); // Replace to clear history
+        window.location.href = "/";
       }
     } finally {
       setLoading(false);
       isVerifying.current = false;
     }
-  }, [pathname, isLoggingOut, loginCompleted, user]);
+  }, [loginCompleted, user, isLoggingOut]);
 
+  // Run verifyUser only once on mount or when user/loginCompleted changes
   useEffect(() => {
-    verifyUser();
+    if (!isMounted.current) {
+      console.log("AuthContext: Initial verifyUser call");
+      isMounted.current = true;
+      verifyUser();
+    }
   }, [verifyUser]);
 
   const login = async (email: string, password: string) => {
@@ -212,25 +258,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         console.log("AuthContext: Login successful, user:", data.user);
-        setUser(data.user); // Set user state immediately
-        userCache.current = data.user; // Cache user
-        setPostLogout(false); // Reset post-logout flag
+        setUser(data.user);
+        userCache.current = data.user;
+        setPostLogout(false);
         const admin = data.user?.role === "admin";
         setIsAdmin(admin);
-        setLoginCompleted(true); // Lock user state
-        // Redirect based on role
-        if (data.user?.role === "admin") {
-          console.log(
-            "AuthContext: Admin logged in, replacing history to /admin"
-          );
-          router.replace("/admin"); // Replace to clear history
-        } else if (data.user?.role === "user") {
-          console.log(
-            "AuthContext: User logged in, replacing history to /dashboard"
-          );
-          router.replace("/dashboard"); // Replace to clear history
-        }
-        await verifyUser(); // Verify to ensure consistency
+        setLoginCompleted(true);
+        const redirectPath = admin ? "/admin" : "/dashboard";
+        console.log(`AuthContext: Redirecting to ${redirectPath}`);
+        clearHistory(redirectPath);
+        window.location.href = redirectPath;
       } else {
         const errorData = await response.json();
         console.log("AuthContext: Login failed:", errorData.message);
@@ -248,35 +285,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     console.log("AuthContext: Logging out");
-    setIsLoggingOut(true); // Pause verifyUser
-    setPostLogout(true); // Set post-logout flag
-    userCache.current = null; // Clear cache immediately
-    setUser(null); // Clear user state
-    setIsAdmin(false); // Clear admin state
-    setLoginCompleted(false); // Reset login completed flag
-    const promise = fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Logout request failed");
-        }
-        console.log("AuthContext: Logout successful, replacing history to /");
-        router.replace("/"); // Replace to clear history
-      })
-      .catch((error) => {
-        console.error("AuthContext: Logout error:", error);
-        toast.error("Logout failed. Please try again.");
-        throw error;
-      })
-      .finally(() => {
-        setIsLoggingOut(false); // Re-enable verifyUser
-        logoutPromise.current = null;
-      });
+    setIsLoggingOut(true);
+    setPostLogout(true);
+    userCache.current = null;
+    setUser(null);
+    setIsAdmin(false);
+    setLoginCompleted(false);
 
-    logoutPromise.current = promise;
-    await promise;
+    // Clear token cookie client-side
+    if (typeof window !== "undefined") {
+      document.cookie =
+        "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+    }
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Logout request failed");
+      }
+      console.log("AuthContext: Logout successful");
+      toast.success("Logged out successfully");
+      // Clear history and force reload
+      clearHistory("/");
+      window.location.href = "/";
+    } catch (error) {
+      console.error("AuthContext: Logout error:", error);
+      toast.error("Logout failed. Please try again.");
+      // Still redirect to / on error
+      clearHistory("/");
+      window.location.href = "/";
+    } finally {
+      setIsLoggingOut(false);
+      logoutPromise.current = null;
+    }
   };
 
   return (
