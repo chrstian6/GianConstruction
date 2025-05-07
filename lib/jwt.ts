@@ -24,7 +24,6 @@ export async function generateToken(payload: UserPayload): Promise<string> {
       .setIssuedAt()
       .setExpirationTime("1d")
       .sign(secret);
-    console.log("JWT generated successfully:", token);
     return token;
   } catch (error) {
     console.error("Error generating JWT:", error);
@@ -43,9 +42,7 @@ export async function verifyToken(token: string): Promise<UserPayload | null> {
       algorithms: ["HS256"],
       clockTolerance: 15,
     });
-    console.log("JWT verified successfully:", payload);
     if (!payload.id || !payload.email || !payload.role) {
-      console.warn("Invalid JWT payload:", payload);
       return null;
     }
     return payload as UserPayload;

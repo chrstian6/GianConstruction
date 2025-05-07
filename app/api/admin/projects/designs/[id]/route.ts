@@ -3,10 +3,27 @@ import Design from "@/models/Design";
 import connectDB from "@/lib/db";
 import { z } from "zod";
 
+// Define available units
+const availableUnits = [
+  "piece",
+  "kg",
+  "meter",
+  "liter",
+  "square meter",
+  "cubic meter",
+  "set",
+  "bundle",
+  "roll",
+  "bag",
+];
+
 // Define the material schema for validation
 const materialSchema = z.object({
   name: z.string().min(1, "Material name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
+  unit: z.enum(availableUnits as [string, ...string[]], {
+    errorMap: () => ({ message: "Please select a valid unit" }),
+  }),
   unitPrice: z.number().min(0, "Unit price must be positive"),
 });
 
@@ -14,10 +31,7 @@ const materialSchema = z.object({
 const updateDesignSchema = z.object({
   title: z.string().min(1, "Title is required").max(100).optional(),
   description: z.string().min(1, "Description is required").max(500).optional(),
-  images: z
-    .array(z.string().url("Invalid image URL"))
-    .optional()
-    .nullable(),
+  images: z.array(z.string().url("Invalid image URL")).optional().nullable(),
   category: z
     .enum(["Residential", "Commercial", "Industrial", "Landscape"])
     .optional(),
@@ -77,7 +91,20 @@ export async function PUT(
     // Validate the request body
     const validatedData = updateDesignSchema.parse(body);
 
-    const design = await Design.findByIdAndUpdate(params.id, validatedData, {
+    // Ensure materials are properly formatted
+    const updateData = {
+      ...validatedData,
+      materials: validatedData.materials
+        ? validatedData.materials.map((material) => ({
+            name: material.name,
+            quantity: material.quantity,
+            unit: material.unit,
+            unitPrice: material.unitPrice,
+          }))
+        : undefined,
+    };
+
+    const design = await Design.findByIdAndUpdate(params.id, updateData, {
       new: true,
       runValidators: true,
     });

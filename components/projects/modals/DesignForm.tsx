@@ -29,14 +29,31 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Upload, Trash2, DollarSign } from "lucide-react";
+import { Plus, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+
+// Define available units
+const availableUnits = [
+  "piece",
+  "kg",
+  "meter",
+  "liter",
+  "square meter",
+  "cubic meter",
+  "set",
+  "bundle",
+  "roll",
+  "bag",
+];
 
 // Define the material schema
 const materialSchema = z.object({
   name: z.string().min(1, "Material name is required"),
   quantity: z.number().min(1, "Quantity must be at least 1"),
+  unit: z.enum(availableUnits as [string, ...string[]], {
+    errorMap: () => ({ message: "Please select a valid unit" }),
+  }),
   unitPrice: z.number().min(0, "Unit price must be positive"),
 });
 
@@ -108,8 +125,14 @@ export function DesignForm({
   const [newMaterial, setNewMaterial] = useState({
     name: "",
     quantity: 1,
+    unit: availableUnits[0], // Default to first unit
     unitPrice: 0,
   });
+  const [estimatedCostInput, setEstimatedCostInput] = useState(
+    defaultValues?.estimatedCost
+      ? defaultValues.estimatedCost.toLocaleString("en-PH")
+      : ""
+  );
 
   // Calculate total cost from materials
   const calculateTotalCost = (materials: DesignFormValues["materials"]) => {
@@ -163,12 +186,18 @@ export function DesignForm({
       const currentMaterials = form.getValues("materials") || [];
       const updatedMaterials = [...currentMaterials, validatedMaterial];
       form.setValue("materials", updatedMaterials, { shouldValidate: true });
-      form.setValue("estimatedCost", calculateTotalCost(updatedMaterials), {
-        shouldValidate: true,
+      const totalCost = calculateTotalCost(updatedMaterials);
+      form.setValue("estimatedCost", totalCost, { shouldValidate: true });
+      setEstimatedCostInput(totalCost.toLocaleString("en-PH"));
+      setNewMaterial({
+        name: "",
+        quantity: 1,
+        unit: availableUnits[0],
+        unitPrice: 0,
       });
-      setNewMaterial({ name: "", quantity: 1, unitPrice: 0 });
+      setIsQuotationOpen(false);
     } catch (error) {
-      toast.error("Invalid material details", {
+      toast.error("Invalid material details. Please fill all fields.", {
         position: "bottom-right",
         richColors: true,
       });
@@ -180,9 +209,25 @@ export function DesignForm({
     const currentMaterials = form.getValues("materials") || [];
     const updatedMaterials = currentMaterials.filter((_, i) => i !== index);
     form.setValue("materials", updatedMaterials, { shouldValidate: true });
-    form.setValue("estimatedCost", calculateTotalCost(updatedMaterials), {
-      shouldValidate: true,
-    });
+    const totalCost = calculateTotalCost(updatedMaterials);
+    form.setValue("estimatedCost", totalCost, { shouldValidate: true });
+    setEstimatedCostInput(totalCost.toLocaleString("en-PH"));
+  };
+
+  // Handle estimated cost input
+  const handleEstimatedCostChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value.replace(/[^0-9]/g, ""); // Remove non-digits
+    const numValue = Number(value) || 0;
+    setEstimatedCostInput(numValue.toLocaleString("en-PH"));
+    form.setValue("estimatedCost", numValue, { shouldValidate: true });
+  };
+
+  // Format estimated cost on blur
+  const handleEstimatedCostBlur = () => {
+    const value = form.getValues("estimatedCost") || 0;
+    setEstimatedCostInput(value.toLocaleString("en-PH"));
   };
 
   // Upload files, delete removed images, and submit form
@@ -258,15 +303,17 @@ export function DesignForm({
           : "Design created successfully",
         { position: "bottom-right", richColors: true }
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload/Delete error:", error);
-      toast.error("Failed to process images", {
+      const errorMessage =
+        error.message || "Failed to process images or submit design";
+      toast.error(errorMessage, {
         position: "bottom-right",
         richColors: true,
       });
-      form.setError("images", {
+      form.setError("root", {
         type: "manual",
-        message: "Failed to process images",
+        message: errorMessage,
       });
     } finally {
       setIsUploading(false);
@@ -385,7 +432,7 @@ export function DesignForm({
                     variant="outline"
                     type="button"
                     disabled={isUploading || isSubmitting}
-                    className="w-full"
+                    className="w-full cursor-pointer"
                   >
                     <label
                       htmlFor="image-upload"
@@ -519,15 +566,21 @@ export function DesignForm({
             name="estimatedCost"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Estimated Cost</FormLabel>
+                <FormLabel>Estimated Cost (₱)</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={field.value}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      ₱
+                    </span>
+                    <Input
+                      type="text"
+                      value={estimatedCostInput}
+                      onChange={handleEstimatedCostChange}
+                      onBlur={handleEstimatedCostBlur}
+                      placeholder="1,000,000"
+                      className="pl-8"
+                    />
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -537,7 +590,7 @@ export function DesignForm({
           <Dialog open={isQuotationOpen} onOpenChange={setIsQuotationOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" type="button">
-                <DollarSign className="mr-2 h-4 w-4" />
+                <Plus className="mr-2 h-4 w-4" />
                 Manage Quotation
               </Button>
             </DialogTrigger>
@@ -553,6 +606,7 @@ export function DesignForm({
                       <tr className="bg-gray-100">
                         <th className="p-2 text-left">Material</th>
                         <th className="p-2 text-left">Quantity</th>
+                        <th className="p-2 text-left">Unit</th>
                         <th className="p-2 text-left">Unit Price</th>
                         <th className="p-2 text-left">Total</th>
                         <th className="p-2"></th>
@@ -564,11 +618,12 @@ export function DesignForm({
                           <tr key={index} className="border-t">
                             <td className="p-2">{material.name}</td>
                             <td className="p-2">{material.quantity}</td>
+                            <td className="p-2">{material.unit}</td>
                             <td className="p-2">
-                              ${material.unitPrice.toFixed(2)}
+                              ₱{material.unitPrice.toFixed(2)}
                             </td>
                             <td className="p-2">
-                              $
+                              ₱
                               {(material.quantity * material.unitPrice).toFixed(
                                 2
                               )}
@@ -597,7 +652,7 @@ export function DesignForm({
                 {/* Add New Material */}
                 <div className="space-y-4">
                   <h4 className="font-medium">Add New Material</h4>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-4 gap-4">
                     <Input
                       placeholder="Material Name"
                       value={newMaterial.name}
@@ -620,6 +675,23 @@ export function DesignForm({
                         })
                       }
                     />
+                    <Select
+                      value={newMaterial.unit}
+                      onValueChange={(value) =>
+                        setNewMaterial({ ...newMaterial, unit: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableUnits.map((unit) => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Input
                       type="number"
                       min="0"
@@ -637,7 +709,12 @@ export function DesignForm({
                   <Button
                     type="button"
                     onClick={handleAddMaterial}
-                    disabled={!newMaterial.name || newMaterial.unitPrice < 0}
+                    disabled={
+                      !newMaterial.name ||
+                      newMaterial.quantity < 1 ||
+                      !newMaterial.unit ||
+                      newMaterial.unitPrice < 0
+                    }
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Material
@@ -648,8 +725,13 @@ export function DesignForm({
                 <div className="flex justify-between items-center p-4 bg-gray-50 rounded-md">
                   <span className="font-medium">Total Cost:</span>
                   <span>
-                    $
-                    {calculateTotalCost(form.getValues("materials")).toFixed(2)}
+                    ₱
+                    {calculateTotalCost(
+                      form.getValues("materials")
+                    ).toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
               </div>
@@ -716,4 +798,3 @@ export function DesignForm({
     </Form>
   );
 }
-  

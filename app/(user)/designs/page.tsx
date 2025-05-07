@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { motion } from "framer-motion";
 
 interface Design {
@@ -43,7 +44,12 @@ interface Design {
   rooms: number;
   estimatedCost: number;
   isFeatured?: boolean;
-  materials?: { name: string; quantity: number; unitPrice: number }[];
+  materials?: {
+    name: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+  }[];
 }
 
 // Animation variants for scroll reveal
@@ -69,6 +75,7 @@ export default function UserDesignPage() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [loading, setLoading] = useState(true);
   const [quotationOpen, setQuotationOpen] = useState<string | null>(null);
+  const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
   const [hoveredDesign, setHoveredDesign] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { user } = useAuth();
@@ -124,91 +131,153 @@ export default function UserDesignPage() {
     // window.location.href = "/appointments/new";
   };
 
-  const handleGetQuotation = (design: Design) => {
-    if (!design.materials || design.materials.length === 0) {
-      toast.error("No quotation available for this design at the moment", {
+  const handleGetQuotation = async (design: Design) => {
+    try {
+      const response = await fetch(`/projects/design/${design._id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.materials?.length > 0) {
+          setSelectedDesign(data);
+          setQuotationOpen(design._id);
+        } else {
+          toast.error("No quotation available for this design at the moment", {
+            position: "bottom-right",
+            duration: 5000,
+            dismissible: true,
+            richColors: true,
+          });
+        }
+      } else {
+        throw new Error("Failed to fetch design");
+      }
+    } catch (error) {
+      console.error("Quotation fetch error:", error);
+      toast.error("Failed to fetch quotation", {
         position: "bottom-right",
         duration: 5000,
         dismissible: true,
         richColors: true,
       });
-      return;
     }
-    setQuotationOpen(design._id);
   };
 
   const generatePDF = (design: Design) => {
+    if (!design || !design.materials) return;
+
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 10;
-    let y = 20;
+    let yOffset = margin;
 
     // Header
-    doc.setFontSize(16);
-    doc.text("Quotation", pageWidth / 2, y, { align: "center" });
-    y += 10;
-    doc.setFontSize(12);
-    doc.text(`Design: ${design.title}`, margin, y);
-    y += 10;
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("Gian Construction", margin, yOffset);
+    yOffset += 8;
 
-    // Materials Table
-    if (design.materials && design.materials.length > 0) {
-      doc.setFontSize(10);
-      const headers = ["Material", "Quantity", "Unit Price", "Total"];
-      const rows = design.materials.map((m) => [
-        m.name,
-        m.quantity.toString(),
-        `$${m.unitPrice.toFixed(2)}`,
-        `$${(m.quantity * m.unitPrice).toFixed(2)}`,
-      ]);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("123 Construction St., Manila, Philippines", margin, yOffset);
+    yOffset += 10;
 
-      // Simple table drawing
-      const colWidths = [80, 30, 30, 30];
-      let x = margin;
+    // Title
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Quotation: ${design.title}`, margin, yOffset);
+    yOffset += 10;
 
-      // Draw headers
-      headers.forEach((header, i) => {
-        doc.text(header, x, y);
-        x += colWidths[i];
+    // Design Details
+    doc.setFontSize(10);
+    const details = [
+      `Description: ${design.description}`,
+      `Category: ${design.category}`,
+      `Style: ${design.style}`,
+      `Area: ${design.sqm} sqm`,
+      `Rooms: ${design.rooms}`,
+      `Estimated Cost: ₱${design.estimatedCost.toLocaleString("en-PH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+    ];
+    details.forEach((line) => {
+      doc.text(line, margin, yOffset);
+      yOffset += 6;
+    });
+
+    yOffset += 5;
+
+    // Quotation Table
+    if (design.materials.length > 0) {
+      autoTable(doc, {
+        startY: yOffset,
+        head: [["Material", "Quantity", "Unit", "Unit Price (₱)", "Total (₱)"]],
+        body: design.materials.map((material) => [
+          material.name,
+          material.quantity.toString(),
+          material.unit,
+          `₱${material.unitPrice.toLocaleString("en-PH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+          `₱${(material.quantity * material.unitPrice).toLocaleString("en-PH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+        ]),
+        theme: "striped",
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: [255, 255, 255],
+          fontSize: 10,
+        },
+        bodyStyles: { fontSize: 10 },
+        margin: { left: margin, right: margin },
+        columnStyles: {
+          0: { cellWidth: 60 }, // Material
+          1: { cellWidth: 30 }, // Quantity
+          2: { cellWidth: 30 }, // Unit
+          3: { cellWidth: 30 }, // Unit Price
+          4: { cellWidth: 30 }, // Total
+        },
       });
-      y += 5;
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 5;
 
-      // Draw rows
-      rows.forEach((row) => {
-        x = margin;
-        row.forEach((cell, i) => {
-          doc.text(cell, x, y);
-          x += colWidths[i];
-        });
-        y += 7;
-      });
-      y += 5;
+      yOffset = (doc as any).lastAutoTable.finalY + 10;
     } else {
-      doc.setFontSize(10);
-      doc.text("No materials specified.", margin, y);
-      y += 10;
+      doc.text("No materials specified.", margin, yOffset);
+      yOffset += 10;
     }
 
     // Total Cost
+    const totalCost =
+      design.materials?.reduce(
+        (sum, material) => sum + material.quantity * material.unitPrice,
+        0
+      ) || 0;
     doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
     doc.text(
-      `Total Estimated Cost: $${design.estimatedCost.toLocaleString()}`,
+      `Total Quotation Cost: ₱${totalCost.toLocaleString("en-PH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
       margin,
-      y
+      yOffset
     );
 
     // Footer
-    y += 10;
-    doc.setFontSize(8);
-    doc.text(
-      "Generated by Gian Construction",
-      pageWidth / 2,
-      doc.internal.pageSize.getHeight() - 10,
-      { align: "center" }
-    );
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.text(
+        `Generated by Gian Construction | Page ${i} of ${pageCount}`,
+        pageWidth - margin - 50,
+        doc.internal.pageSize.getHeight() - margin,
+        { align: "right" }
+      );
+    }
 
+    // Save PDF
     doc.save(`${design.title}_quotation.pdf`);
   };
 
@@ -364,7 +433,13 @@ export default function UserDesignPage() {
                     </div>
                     <div>
                       <p className="text-gray-500">Est. Cost</p>
-                      <p>${design.estimatedCost.toLocaleString()}</p>
+                      <p>
+                        ₱
+                        {design.estimatedCost.toLocaleString("en-PH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -405,33 +480,48 @@ export default function UserDesignPage() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                      {design.materials && design.materials.length > 0 ? (
+                      {selectedDesign?.materials &&
+                      selectedDesign.materials.length > 0 ? (
                         <div className="border rounded-md">
                           <table className="w-full">
                             <thead>
                               <tr className="bg-gray-100">
                                 <th className="p-2 text-left">Material</th>
                                 <th className="p-2 text-left">Quantity</th>
+                                <th className="p-2 text-left">Unit</th>
                                 <th className="p-2 text-left">Unit Price</th>
                                 <th className="p-2 text-left">Total</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {design.materials.map((material, index) => (
-                                <tr key={index} className="border-t">
-                                  <td className="p-2">{material.name}</td>
-                                  <td className="p-2">{material.quantity}</td>
-                                  <td className="p-2">
-                                    ${material.unitPrice.toFixed(2)}
-                                  </td>
-                                  <td className="p-2">
-                                    $
-                                    {(
-                                      material.quantity * material.unitPrice
-                                    ).toFixed(2)}
-                                  </td>
-                                </tr>
-                              ))}
+                              {selectedDesign.materials.map(
+                                (material, index) => (
+                                  <tr key={index} className="border-t">
+                                    <td className="p-2">{material.name}</td>
+                                    <td className="p-2">{material.quantity}</td>
+                                    <td className="p-2">{material.unit}</td>
+                                    <td className="p-2">
+                                      ₱
+                                      {material.unitPrice.toLocaleString(
+                                        "en-PH",
+                                        {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        }
+                                      )}
+                                    </td>
+                                    <td className="p-2">
+                                      ₱
+                                      {(
+                                        material.quantity * material.unitPrice
+                                      ).toLocaleString("en-PH", {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })}
+                                    </td>
+                                  </tr>
+                                )
+                              )}
                             </tbody>
                           </table>
                         </div>
@@ -442,26 +532,42 @@ export default function UserDesignPage() {
                       )}
                       <div className="flex justify-between items-center p-4 bg-gray-50 rounded-md">
                         <span className="font-medium">
-                          Total Estimated Cost:
+                          Total Quotation Cost:
                         </span>
                         <span className="text-lg font-semibold">
-                          ${design.estimatedCost.toLocaleString()}
+                          ₱
+                          {(selectedDesign?.materials &&
+                          selectedDesign.materials.length > 0
+                            ? selectedDesign.materials.reduce(
+                                (sum, material) =>
+                                  sum + material.quantity * material.unitPrice,
+                                0
+                              )
+                            : design.estimatedCost
+                          ).toLocaleString("en-PH", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
                         </span>
                       </div>
                     </div>
                     <DialogFooter>
                       <Button
                         variant="outline"
-                        onClick={() => setQuotationOpen(null)}
+                        onClick={() => {
+                          setQuotationOpen(null);
+                          setSelectedDesign(null);
+                        }}
                       >
                         Close
                       </Button>
-                      {design.materials && design.materials.length > 0 && (
-                        <Button onClick={() => generatePDF(design)}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download PDF
-                        </Button>
-                      )}
+                      {selectedDesign?.materials &&
+                        selectedDesign.materials.length > 0 && (
+                          <Button onClick={() => generatePDF(design)}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download PDF
+                          </Button>
+                        )}
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>

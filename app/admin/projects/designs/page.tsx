@@ -254,7 +254,7 @@ export default function ProjectDesignsPage() {
               Add New Design
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-white/80 backdrop-blur-sm">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-white backdrop-blur-sm">
             <DialogHeader>
               <DialogTitle>Add New Design</DialogTitle>
             </DialogHeader>
@@ -412,7 +412,7 @@ export default function ProjectDesignsPage() {
                       Delete
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-white/80 backdrop-blur-sm">
+                  <DialogContent className="bg-white/40 backdrop-blur-sm">
                     <DialogHeader>
                       <DialogTitle>Confirm Deletion</DialogTitle>
                       <DialogDescription>

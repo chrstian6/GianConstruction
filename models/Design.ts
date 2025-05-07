@@ -18,7 +18,7 @@ interface IDesign {
   isFeatured?: boolean;
   projectId?: Schema.Types.ObjectId;
   createdAt?: Date;
-  materials?: { name: string; quantity: number; unitPrice: number }[];
+  updatedAt?: Date;
 }
 
 const DesignSchema = new Schema<IDesign>(
@@ -105,28 +105,6 @@ const DesignSchema = new Schema<IDesign>(
     createdAt: {
       type: Date,
       default: Date.now,
-    },
-    materials: {
-      type: [
-        {
-          name: {
-            type: String,
-            required: [true, "Material name is required"],
-            trim: true,
-          },
-          quantity: {
-            type: Number,
-            required: [true, "Quantity is required"],
-            min: [1, "Quantity must be at least 1"],
-          },
-          unitPrice: {
-            type: Number,
-            required: [true, "Unit price is required"],
-            min: [0, "Unit price must be positive"],
-          },
-        },
-      ],
-      required: false,
     },
   },
   {

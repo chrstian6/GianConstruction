@@ -1,21 +1,16 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Design from "@/models/Design";
+import Quotation from "@/models/Quotation";
 import mongoose from "mongoose";
 
-const materialSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  quantity: { type: Number, required: true, min: 1 },
-  unit: { type: String, required: true },
-  unitPrice: { type: Number, required: true, min: 0 },
-});
 export async function POST(request: Request) {
   try {
     await dbConnect();
     const body = await request.json();
 
     // Debug log to see what's being received
-    console.log("Received request body:", body);
+    console.log("Received request body:", JSON.stringify(body, null, 2));
 
     // Convert single image to array if needed
     const images = Array.isArray(body.images)
@@ -51,24 +46,112 @@ export async function POST(request: Request) {
       );
     }
 
-    const newDesign = new Design({
-      title: body.title,
-      description: body.description,
-      images: images,
-      category: body.category,
-      style: body.style,
-      sqm: Number(body.sqm),
-      rooms: Number(body.rooms),
-      estimatedCost: Number(body.estimatedCost),
-      isFeatured: Boolean(body.isFeatured || false),
-    });
+    // Validate materials if provided
+    if (body.materials && Array.isArray(body.materials)) {
+      for (const [index, material] of body.materials.entries()) {
+        if (!material.name || typeof material.name !== "string") {
+          return NextResponse.json(
+            {
+              error: `Invalid material data: 'name' is missing or invalid for material at index ${index}`,
+            },
+            { status: 400 }
+          );
+        }
+        if (typeof material.quantity !== "number" || material.quantity < 1) {
+          return NextResponse.json(
+            {
+              error: `Invalid material data: 'quantity' must be a number ≥ 1 for material at index ${index}`,
+            },
+            { status: 400 }
+          );
+        }
+        if (typeof material.unitPrice !== "number" || material.unitPrice < 0) {
+          return NextResponse.json(
+            {
+              error: `Invalid material data: 'unitPrice' must be a number ≥ 0 for material at index ${index}`,
+            },
+            { status: 400 }
+          );
+        }
+        // 'unit' is optional to avoid breaking existing forms
+        if (material.unit && typeof material.unit !== "string") {
+          return NextResponse.json(
+            {
+              error: `Invalid material data: 'unit' must be a string for material at index ${index}`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
 
-    const savedDesign = await newDesign.save();
+    // Start a session for atomic operations
+    const session = await mongoose.startSession();
+    let isTransactionCommitted = false;
 
-    return NextResponse.json({
-      success: true,
-      data: savedDesign.toObject(), // Convert Mongoose document to plain object
-    });
+    try {
+      session.startTransaction();
+
+      // Create the design
+      const newDesign = new Design({
+        title: body.title,
+        description: body.description,
+        images: images,
+        category: body.category,
+        style: body.style,
+        sqm: Number(body.sqm),
+        rooms: Number(body.rooms),
+        estimatedCost: Number(body.estimatedCost),
+        isFeatured: Boolean(body.isFeatured || false),
+        projectId:
+          body.projectId && mongoose.Types.ObjectId.isValid(body.projectId)
+            ? new mongoose.Types.ObjectId(body.projectId)
+            : undefined,
+      });
+
+      const savedDesign = await newDesign.save({ session });
+
+      // Create the quotation if materials are provided
+      if (
+        body.materials &&
+        Array.isArray(body.materials) &&
+        body.materials.length > 0
+      ) {
+        const totalCost = body.materials.reduce(
+          (sum: number, material: { quantity: number; unitPrice: number }) =>
+            sum + material.quantity * material.unitPrice,
+          0
+        );
+
+        const quotation = new Quotation({
+          designId: savedDesign._id,
+          materials: body.materials.map((material: any) => ({
+            name: material.name,
+            quantity: material.quantity,
+            unit: material.unit || "unit", // Default to "unit" if not provided
+            unitPrice: material.unitPrice,
+          })),
+          totalCost,
+        });
+
+        await quotation.save({ session });
+      }
+
+      await session.commitTransaction();
+      isTransactionCommitted = true;
+
+      return NextResponse.json({
+        success: true,
+        data: savedDesign.toObject(),
+      });
+    } catch (error) {
+      if (!isTransactionCommitted) {
+        await session.abortTransaction();
+      }
+      throw error;
+    } finally {
+      session.endSession();
+    }
   } catch (error) {
     console.error("Error in design creation:", error);
     return NextResponse.json(
@@ -79,6 +162,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
 export const dynamic = "force-dynamic"; // Ensure dynamic fetching
 
 export async function GET() {
