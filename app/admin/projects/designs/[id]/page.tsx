@@ -2,31 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  DesignForm,
-  DesignFormValues,
-} from "@/components/projects/modals/DesignForm";
+import { DesignForm } from "@/components/projects/modals/DesignForm";
 import { toast } from "sonner";
 import { SubmitHandler } from "react-hook-form";
-
-interface Design {
-  _id: string;
-  title: string;
-  description: string;
-  images: string[];
-  category: string;
-  style: string;
-  sqm: number;
-  rooms: number;
-  estimatedCost: number;
-  isFeatured?: boolean;
-  materials?: {
-    name: string;
-    quantity: number;
-    unit: string;
-    unitPrice: number;
-  }[];
-}
+import { Design, DesignFormValues } from "@/types/Design";
 
 export default function EditDesignPage({ params }: { params: { id: string } }) {
   const [design, setDesign] = useState<Design | null>(null);
@@ -36,12 +15,14 @@ export default function EditDesignPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchDesign = async () => {
       try {
-        const response = await fetch(`/projects/design/${params.id}`);
+        const response = await fetch(
+          `/api/admin/projects/designs/${params.id}`
+        );
         if (!response.ok) {
           throw new Error("Failed to fetch design");
         }
-        const designData = await response.json();
-        setDesign(designData);
+        const { data } = await response.json();
+        setDesign(data);
       } catch (error) {
         console.error("Fetch error:", error);
         toast.error("Failed to load design", {
@@ -59,12 +40,13 @@ export default function EditDesignPage({ params }: { params: { id: string } }) {
 
   const handleSubmit: SubmitHandler<DesignFormValues> = async (values) => {
     try {
-      const response = await fetch(`/projects/design/${params.id}`, {
+      const { materials, ...designData } = values;
+      const response = await fetch(`/api/admin/projects/designs/${params.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...designData, materials }),
       });
 
       if (!response.ok) {

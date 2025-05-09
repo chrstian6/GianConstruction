@@ -32,20 +32,7 @@ import {
 import { DesignForm } from "@/components/projects/modals/DesignForm";
 import { Search, Filter, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
-
-interface Design {
-  _id: string;
-  title: string;
-  description: string;
-  images: string[];
-  category: string;
-  style: string;
-  sqm: number;
-  rooms: number;
-  estimatedCost: number;
-  isFeatured?: boolean;
-  materials?: { name: string; quantity: number; unitPrice: number }[];
-}
+import { Design, DesignFormValues } from "@/types/Design";
 
 export default function ProjectDesignsPage() {
   const [designs, setDesigns] = useState<Design[]>([]);
@@ -85,20 +72,7 @@ export default function ProjectDesignsPage() {
     fetchDesigns();
   }, []);
 
-  interface FormValues {
-    title: string;
-    description: string;
-    images?: string[];
-    category: string;
-    style: string;
-    sqm: number;
-    rooms: number;
-    estimatedCost: number;
-    isFeatured?: boolean;
-    materials?: { name: string; quantity: number; unitPrice: number }[];
-  }
-
-  const handleSubmit: SubmitHandler<FormValues> = async (values) => {
+  const handleSubmit: SubmitHandler<DesignFormValues> = async (values) => {
     setIsSubmitting(true);
     try {
       console.log("Starting design submission:", values);
@@ -380,7 +354,7 @@ export default function ProjectDesignsPage() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Est. Cost</p>
-                    <p>${design.estimatedCost.toLocaleString()}</p>
+                    <p>₱{design.estimatedCost.toLocaleString("en-PH")}</p>
                   </div>
                 </div>
               </CardContent>

@@ -32,6 +32,7 @@ import {
 import { Plus, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { DesignFormValues } from "@/types/Design";
 
 // Define available units
 const availableUnits = [
@@ -77,9 +78,6 @@ const formSchema = z.object({
   isFeatured: z.boolean().default(false).optional(),
   materials: z.array(materialSchema).optional(),
 });
-
-// Create a type from the Zod schema
-export type DesignFormValues = z.infer<typeof formSchema>;
 
 // Define the control type explicitly
 export type DesignFormControl = Control<DesignFormValues>;
@@ -195,7 +193,6 @@ export function DesignForm({
         unit: availableUnits[0],
         unitPrice: 0,
       });
-      setIsQuotationOpen(false);
     } catch (error) {
       toast.error("Invalid material details. Please fill all fields.", {
         position: "bottom-right",

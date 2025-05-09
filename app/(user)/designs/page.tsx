@@ -32,25 +32,7 @@ import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { motion } from "framer-motion";
-
-interface Design {
-  _id: string;
-  title: string;
-  description: string;
-  images: string[];
-  category: string;
-  style: string;
-  sqm: number;
-  rooms: number;
-  estimatedCost: number;
-  isFeatured?: boolean;
-  materials?: {
-    name: string;
-    quantity: number;
-    unit: string;
-    unitPrice: number;
-  }[];
-}
+import { Design, Quotation } from "@/types/Design";
 
 // Animation variants for scroll reveal
 const sectionVariants = {
@@ -75,6 +57,9 @@ export default function UserDesignPage() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [loading, setLoading] = useState(true);
   const [quotationOpen, setQuotationOpen] = useState<string | null>(null);
+  const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(
+    null
+  );
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
   const [hoveredDesign, setHoveredDesign] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -85,12 +70,11 @@ export default function UserDesignPage() {
     const fetchDesigns = async () => {
       try {
         const response = await fetch("/api/admin/projects/designs");
-        if (response.ok) {
-          const data = await response.json();
-          setDesigns(Array.isArray(data.data) ? data.data : []);
-        } else {
+        if (!response.ok) {
           throw new Error("Failed to fetch designs");
         }
+        const data = await response.json();
+        setDesigns(Array.isArray(data.data) ? data.data : []);
       } catch (error) {
         console.error("Fetch error:", error);
         toast.error("Failed to load designs", {
@@ -133,26 +117,55 @@ export default function UserDesignPage() {
 
   const handleGetQuotation = async (design: Design) => {
     try {
-      const response = await fetch(`/projects/design/${design._id}`);
+      // Validate design ID
+      if (!design._id.match(/^[0-9a-fA-F]{24}$/)) {
+        throw new Error("Invalid design ID");
+      }
+
+      const response = await fetch(
+        `/api/admin/projects/designs/${design._id}/quotation`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error(
+          response.status === 404
+            ? "Quotation not available for this design. Please contact support."
+            : `Expected JSON, received ${contentType || "unknown content type"}`
+        );
+      }
+
       if (response.ok) {
         const data = await response.json();
-        if (data.materials?.length > 0) {
-          setSelectedDesign(data);
+        if (data.success && data.data?.materials?.length > 0) {
+          setSelectedDesign(design);
+          setSelectedQuotation(data.data);
           setQuotationOpen(design._id);
         } else {
-          toast.error("No quotation available for this design at the moment", {
-            position: "bottom-right",
-            duration: 5000,
-            dismissible: true,
-            richColors: true,
-          });
+          throw new Error(
+            data.error || "No quotation available for this design"
+          );
         }
+      } else if (response.status === 404) {
+        throw new Error("No quotation available for this design");
       } else {
-        throw new Error("Failed to fetch design");
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error ${response.status}`);
       }
     } catch (error) {
       console.error("Quotation fetch error:", error);
-      toast.error("Failed to fetch quotation", {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch quotation";
+      toast.error(errorMessage, {
         position: "bottom-right",
         duration: 5000,
         dismissible: true,
@@ -161,9 +174,7 @@ export default function UserDesignPage() {
     }
   };
 
-  const generatePDF = (design: Design) => {
-    if (!design || !design.materials) return;
-
+  const generatePDF = (design: Design, quotation: Quotation) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 10;
@@ -207,11 +218,11 @@ export default function UserDesignPage() {
     yOffset += 5;
 
     // Quotation Table
-    if (design.materials.length > 0) {
+    if (quotation.materials.length > 0) {
       autoTable(doc, {
         startY: yOffset,
         head: [["Material", "Quantity", "Unit", "Unit Price (₱)", "Total (₱)"]],
-        body: design.materials.map((material) => [
+        body: quotation.materials.map((material) => [
           material.name,
           material.quantity.toString(),
           material.unit,
@@ -248,15 +259,10 @@ export default function UserDesignPage() {
     }
 
     // Total Cost
-    const totalCost =
-      design.materials?.reduce(
-        (sum, material) => sum + material.quantity * material.unitPrice,
-        0
-      ) || 0;
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text(
-      `Total Quotation Cost: ₱${totalCost.toLocaleString("en-PH", {
+      `Total Quotation Cost: ₱${quotation.totalCost.toLocaleString("en-PH", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`,
@@ -281,11 +287,13 @@ export default function UserDesignPage() {
     doc.save(`${design.title}_quotation.pdf`);
   };
 
-  const prevImage = (images: string[]) => {
+  const prevImage = (images: string[] | undefined) => {
+    if (!images || images.length === 0) return;
     setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
   };
 
-  const nextImage = (images: string[]) => {
+  const nextImage = (images: string[] | undefined) => {
+    if (!images || images.length === 0) return;
     setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
@@ -480,8 +488,8 @@ export default function UserDesignPage() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                      {selectedDesign?.materials &&
-                      selectedDesign.materials.length > 0 ? (
+                      {selectedQuotation?.materials &&
+                      selectedQuotation.materials.length > 0 ? (
                         <div className="border rounded-md">
                           <table className="w-full">
                             <thead>
@@ -494,7 +502,7 @@ export default function UserDesignPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {selectedDesign.materials.map(
+                              {selectedQuotation.materials.map(
                                 (material, index) => (
                                   <tr key={index} className="border-t">
                                     <td className="p-2">{material.name}</td>
@@ -527,7 +535,11 @@ export default function UserDesignPage() {
                         </div>
                       ) : (
                         <p className="text-center text-muted-foreground">
-                          No material breakdown available for this design.
+                          No material breakdown available. Estimated cost: ₱
+                          {design.estimatedCost.toLocaleString("en-PH", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
                         </p>
                       )}
                       <div className="flex justify-between items-center p-4 bg-gray-50 rounded-md">
@@ -536,14 +548,8 @@ export default function UserDesignPage() {
                         </span>
                         <span className="text-lg font-semibold">
                           ₱
-                          {(selectedDesign?.materials &&
-                          selectedDesign.materials.length > 0
-                            ? selectedDesign.materials.reduce(
-                                (sum, material) =>
-                                  sum + material.quantity * material.unitPrice,
-                                0
-                              )
-                            : design.estimatedCost
+                          {(
+                            selectedQuotation?.totalCost || design.estimatedCost
                           ).toLocaleString("en-PH", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
@@ -557,13 +563,20 @@ export default function UserDesignPage() {
                         onClick={() => {
                           setQuotationOpen(null);
                           setSelectedDesign(null);
+                          setSelectedQuotation(null);
                         }}
                       >
                         Close
                       </Button>
-                      {selectedDesign?.materials &&
-                        selectedDesign.materials.length > 0 && (
-                          <Button onClick={() => generatePDF(design)}>
+                      {selectedQuotation?.materials &&
+                        selectedQuotation.materials.length > 0 && (
+                          <Button
+                            onClick={() =>
+                              selectedDesign &&
+                              selectedQuotation &&
+                              generatePDF(selectedDesign, selectedQuotation)
+                            }
+                          >
                             <Download className="mr-2 h-4 w-4" />
                             Download PDF
                           </Button>
