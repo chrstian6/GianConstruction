@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, SubmitHandler, Control } from "react-hook-form";
+import { useForm, SubmitHandler, useFieldArray } from "react-hook-form";
 import * as z from "zod";
 import {
   Form,
@@ -21,18 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Plus, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { DesignFormValues } from "@/types/Design";
+import { DesignFormValues, Quotation } from "@/types/Design";
 
 // Define available units
 const availableUnits = [
@@ -79,15 +71,14 @@ const formSchema = z.object({
   materials: z.array(materialSchema).optional(),
 });
 
-// Define the control type explicitly
-export type DesignFormControl = Control<DesignFormValues>;
-
 interface DesignFormProps {
   onSubmit: SubmitHandler<DesignFormValues>;
   onCancel?: () => void;
   defaultValues?: Partial<DesignFormValues>;
   isSubmitting?: boolean;
   designId?: string;
+  quotation?: Quotation | null;
+  onQuotationSubmit?: (materials: Quotation["materials"]) => void;
 }
 
 export function DesignForm({
@@ -96,6 +87,8 @@ export function DesignForm({
   defaultValues,
   isSubmitting = false,
   designId,
+  quotation,
+  onQuotationSubmit,
 }: DesignFormProps) {
   // Initialize the form
   const form = useForm<DesignFormValues>({
@@ -110,22 +103,24 @@ export function DesignForm({
       rooms: 1,
       estimatedCost: 0,
       isFeatured: false,
-      materials: [],
+      materials: quotation?.materials || [],
       ...defaultValues,
     },
+  });
+
+  const {
+    fields: materialFields,
+    append,
+    remove,
+  } = useFieldArray({
+    control: form.control,
+    name: "materials",
   });
 
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [removedImages, setRemovedImages] = useState<string[]>([]);
-  const [isQuotationOpen, setIsQuotationOpen] = useState(false);
-  const [newMaterial, setNewMaterial] = useState({
-    name: "",
-    quantity: 1,
-    unit: availableUnits[0], // Default to first unit
-    unitPrice: 0,
-  });
   const [estimatedCostInput, setEstimatedCostInput] = useState(
     defaultValues?.estimatedCost
       ? defaultValues.estimatedCost.toLocaleString("en-PH")
@@ -141,6 +136,28 @@ export function DesignForm({
       ) || 0
     );
   };
+
+  // Update estimated cost when materials change
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name?.startsWith("materials")) {
+        const materials = value.materials?.filter(
+          (m): m is NonNullable<typeof m> => m !== undefined
+        );
+        const validMaterials = materials?.filter(
+          (m): m is { name: string; quantity: number; unit: string; unitPrice: number } =>
+            m.name !== undefined &&
+            m.quantity !== undefined &&
+            m.unit !== undefined &&
+            m.unitPrice !== undefined
+        );
+        const totalCost = calculateTotalCost(validMaterials);
+        form.setValue("estimatedCost", totalCost, { shouldValidate: true });
+        setEstimatedCostInput(totalCost.toLocaleString("en-PH"));
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   // Handle file selection and generate previews
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,40 +194,6 @@ export function DesignForm({
     form.setValue("images", newImages, { shouldValidate: true });
   };
 
-  // Handle adding a new material
-  const handleAddMaterial = () => {
-    try {
-      const validatedMaterial = materialSchema.parse(newMaterial);
-      const currentMaterials = form.getValues("materials") || [];
-      const updatedMaterials = [...currentMaterials, validatedMaterial];
-      form.setValue("materials", updatedMaterials, { shouldValidate: true });
-      const totalCost = calculateTotalCost(updatedMaterials);
-      form.setValue("estimatedCost", totalCost, { shouldValidate: true });
-      setEstimatedCostInput(totalCost.toLocaleString("en-PH"));
-      setNewMaterial({
-        name: "",
-        quantity: 1,
-        unit: availableUnits[0],
-        unitPrice: 0,
-      });
-    } catch (error) {
-      toast.error("Invalid material details. Please fill all fields.", {
-        position: "bottom-right",
-        richColors: true,
-      });
-    }
-  };
-
-  // Handle removing a material
-  const handleRemoveMaterial = (index: number) => {
-    const currentMaterials = form.getValues("materials") || [];
-    const updatedMaterials = currentMaterials.filter((_, i) => i !== index);
-    form.setValue("materials", updatedMaterials, { shouldValidate: true });
-    const totalCost = calculateTotalCost(updatedMaterials);
-    form.setValue("estimatedCost", totalCost, { shouldValidate: true });
-    setEstimatedCostInput(totalCost.toLocaleString("en-PH"));
-  };
-
   // Handle estimated cost input
   const handleEstimatedCostChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -227,6 +210,24 @@ export function DesignForm({
     setEstimatedCostInput(value.toLocaleString("en-PH"));
   };
 
+  // Validate and submit materials for quotation
+  const handleQuotationSubmit = () => {
+    const materials = form.getValues("materials") || [];
+    try {
+      const validMaterials = materials
+        .filter((m): m is NonNullable<typeof m> => m !== undefined)
+        .map((m) => materialSchema.parse(m)); // Validate each material
+      if (validMaterials.length === 0 && materials.length > 0) {
+        toast.error("Please ensure all materials have valid data.");
+        return;
+      }
+      onQuotationSubmit?.(validMaterials);
+      toast.success("Quotation saved successfully");
+    } catch (error) {
+      toast.error("Invalid material data. Please fill all required fields.");
+    }
+  };
+
   // Upload files, delete removed images, and submit form
   const handleSubmitWithUpload: SubmitHandler<DesignFormValues> = async (
     values
@@ -238,7 +239,6 @@ export function DesignForm({
 
       // Delete removed images
       if (removedImages.length > 0) {
-        console.log("Deleting images:", removedImages);
         const deleteResponse = await fetch("/api/upload/delete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -262,10 +262,6 @@ export function DesignForm({
           formData.append("files", file);
         });
 
-        console.log(
-          "Sending files to /api/upload:",
-          selectedFiles.map((f) => f.name)
-        );
         const uploadResponse = await fetch("/api/upload", {
           method: "POST",
           body: formData,
@@ -276,8 +272,6 @@ export function DesignForm({
         }
 
         const { urls } = await uploadResponse.json();
-        console.log("Received URLs from /api/upload:", urls);
-
         if (!Array.isArray(urls) || urls.length === 0) {
           throw new Error("No valid URLs returned from upload");
         }
@@ -287,31 +281,46 @@ export function DesignForm({
 
       const updatedValues = { ...values, images: uploadedUrls };
 
-      console.log("Submitting form with values:", updatedValues);
+      // Submit design data
       await onSubmit(updatedValues);
 
-      previews.forEach((preview) => URL.revokeObjectURL(preview));
+      // Submit quotation if in edit mode and materials have changed
+      if (onQuotationSubmit && updatedValues.materials?.length) {
+        const validMaterials = updatedValues.materials
+          .filter((m): m is NonNullable<typeof m> => m !== undefined)
+          .map((m) => materialSchema.parse(m));
+        if (validMaterials.length > 0) {
+          await onQuotationSubmit(validMaterials);
+        }
+      }
+
+      // Reset form and state
+      form.reset({
+        title: "",
+        description: "",
+        images: [],
+        category: "Residential",
+        style: "Modern",
+        sqm: 100,
+        rooms: 1,
+        estimatedCost: 0,
+        isFeatured: false,
+        materials: [],
+      });
       setSelectedFiles([]);
       setPreviews([]);
       setRemovedImages([]);
+      setEstimatedCostInput("");
+      previews.forEach((preview) => URL.revokeObjectURL(preview));
+
       toast.success(
-        designId
-          ? "Design updated successfully"
-          : "Design created successfully",
-        { position: "bottom-right", richColors: true }
+        designId ? "Design updated successfully" : "Design created successfully"
       );
     } catch (error: any) {
-      console.error("Upload/Delete error:", error);
       const errorMessage =
         error.message || "Failed to process images or submit design";
-      toast.error(errorMessage, {
-        position: "bottom-right",
-        richColors: true,
-      });
-      form.setError("root", {
-        type: "manual",
-        message: errorMessage,
-      });
+      toast.error(errorMessage);
+      form.setError("root", { type: "manual", message: errorMessage });
     } finally {
       setIsUploading(false);
     }
@@ -332,7 +341,7 @@ export function DesignForm({
       >
         {/* Title Field */}
         <FormField
-          control={form.control as DesignFormControl}
+          control={form.control}
           name="title"
           render={({ field }) => (
             <FormItem>
@@ -347,7 +356,7 @@ export function DesignForm({
 
         {/* Description Field */}
         <FormField
-          control={form.control as DesignFormControl}
+          control={form.control}
           name="description"
           render={({ field }) => (
             <FormItem>
@@ -366,7 +375,7 @@ export function DesignForm({
 
         {/* Image Upload Field */}
         <FormField
-          control={form.control as DesignFormControl}
+          control={form.control}
           name="images"
           render={({ field }) => (
             <FormItem>
@@ -459,7 +468,7 @@ export function DesignForm({
         {/* Category and Style Fields */}
         <div className="grid grid-cols-2 gap-4">
           <FormField
-            control={form.control as DesignFormControl}
+            control={form.control}
             name="category"
             render={({ field }) => (
               <FormItem>
@@ -487,7 +496,7 @@ export function DesignForm({
           />
 
           <FormField
-            control={form.control as DesignFormControl}
+            control={form.control}
             name="style"
             render={({ field }) => (
               <FormItem>
@@ -518,7 +527,7 @@ export function DesignForm({
         {/* Area and Rooms Fields */}
         <div className="grid grid-cols-2 gap-4">
           <FormField
-            control={form.control as DesignFormControl}
+            control={form.control}
             name="sqm"
             render={({ field }) => (
               <FormItem>
@@ -537,7 +546,7 @@ export function DesignForm({
           />
 
           <FormField
-            control={form.control as DesignFormControl}
+            control={form.control}
             name="rooms"
             render={({ field }) => (
               <FormItem>
@@ -556,197 +565,168 @@ export function DesignForm({
           />
         </div>
 
-        {/* Estimated Cost and Quotation */}
-        <div className="space-y-4">
-          <FormField
-            control={form.control as DesignFormControl}
-            name="estimatedCost"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Estimated Cost (₱)</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      ₱
-                    </span>
-                    <Input
-                      type="text"
-                      value={estimatedCostInput}
-                      onChange={handleEstimatedCostChange}
-                      onBlur={handleEstimatedCostBlur}
-                      placeholder="1,000,000"
-                      className="pl-8"
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <Dialog open={isQuotationOpen} onOpenChange={setIsQuotationOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" type="button">
-                <Plus className="mr-2 h-4 w-4" />
-                Manage Quotation
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] bg-white/80 backdrop-blur-sm">
-              <DialogHeader>
-                <DialogTitle>Manage Quotation</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                {/* Material List */}
-                <div className="border rounded-md">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="p-2 text-left">Material</th>
-                        <th className="p-2 text-left">Quantity</th>
-                        <th className="p-2 text-left">Unit</th>
-                        <th className="p-2 text-left">Unit Price</th>
-                        <th className="p-2 text-left">Total</th>
-                        <th className="p-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(form.getValues("materials") || []).map(
-                        (material, index) => (
-                          <tr key={index} className="border-t">
-                            <td className="p-2">{material.name}</td>
-                            <td className="p-2">{material.quantity}</td>
-                            <td className="p-2">{material.unit}</td>
-                            <td className="p-2">
-                              ₱{material.unitPrice.toFixed(2)}
-                            </td>
-                            <td className="p-2">
-                              ₱
-                              {(material.quantity * material.unitPrice).toFixed(
-                                2
-                              )}
-                            </td>
-                            <td className="p-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveMaterial(index)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        )
-                      )}
-                    </tbody>
-                  </table>
-                  {(form.getValues("materials") || []).length === 0 && (
-                    <p className="p-4 text-center text-muted-foreground">
-                      No materials added yet.
-                    </p>
-                  )}
-                </div>
-
-                {/* Add New Material */}
-                <div className="space-y-4">
-                  <h4 className="font-medium">Add New Material</h4>
-                  <div className="grid grid-cols-4 gap-4">
-                    <Input
-                      placeholder="Material Name"
-                      value={newMaterial.name}
-                      onChange={(e) =>
-                        setNewMaterial({
-                          ...newMaterial,
-                          name: e.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      type="number"
-                      min="1"
-                      placeholder="Quantity"
-                      value={newMaterial.quantity}
-                      onChange={(e) =>
-                        setNewMaterial({
-                          ...newMaterial,
-                          quantity: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <Select
-                      value={newMaterial.unit}
-                      onValueChange={(value) =>
-                        setNewMaterial({ ...newMaterial, unit: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select unit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableUnits.map((unit) => (
-                          <SelectItem key={unit} value={unit}>
-                            {unit}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="Unit Price"
-                      value={newMaterial.unitPrice}
-                      onChange={(e) =>
-                        setNewMaterial({
-                          ...newMaterial,
-                          unitPrice: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handleAddMaterial}
-                    disabled={
-                      !newMaterial.name ||
-                      newMaterial.quantity < 1 ||
-                      !newMaterial.unit ||
-                      newMaterial.unitPrice < 0
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Material
-                  </Button>
-                </div>
-
-                {/* Total Cost */}
-                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-md">
-                  <span className="font-medium">Total Cost:</span>
-                  <span>
+        {/* Estimated Cost */}
+        <FormField
+          control={form.control}
+          name="estimatedCost"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Estimated Cost (₱)</FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     ₱
-                    {calculateTotalCost(
-                      form.getValues("materials")
-                    ).toLocaleString("en-PH", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
                   </span>
+                  <Input
+                    type="text"
+                    value={estimatedCostInput}
+                    onChange={handleEstimatedCostChange}
+                    onBlur={handleEstimatedCostBlur}
+                    placeholder="1,000,000"
+                    className="pl-8"
+                  />
                 </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsQuotationOpen(false)}
-                >
-                  Close
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Quotation Materials (only in edit mode) */}
+        {onQuotationSubmit && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Quotation Materials</h3>
+            <div className="border rounded-md">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 text-left">Material</th>
+                    <th className="p-2 text-left">Quantity</th>
+                    <th className="p-2 text-left">Unit</th>
+                    <th className="p-2 text-left">Unit Price</th>
+                    <th className="p-2 text-left">Total</th>
+                    <th className="p-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {materialFields.map((material, index) => (
+                    <tr key={material.id} className="border-t">
+                      <td className="p-2">
+                        <Input
+                          {...form.register(`materials.${index}.name`)}
+                          placeholder="Material Name"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          {...form.register(`materials.${index}.quantity`, {
+                            valueAsNumber: true,
+                          })}
+                          min="1"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Select
+                          onValueChange={(value) =>
+                            form.setValue(`materials.${index}.unit`, value)
+                          }
+                          value={material.unit}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableUnits.map((unit) => (
+                              <SelectItem key={unit} value={unit}>
+                                {unit}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          {...form.register(`materials.${index}.unitPrice`, {
+                            valueAsNumber: true,
+                          })}
+                          min="0"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="p-2">
+                        ₱
+                        {(
+                          material.quantity * material.unitPrice
+                        ).toLocaleString("en-PH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="p-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => remove(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {materialFields.length === 0 && (
+                <p className="p-4 text-center text-muted-foreground">
+                  No materials added yet.
+                </p>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                append({
+                  name: "",
+                  quantity: 1,
+                  unit: availableUnits[0],
+                  unitPrice: 0,
+                })
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Material
+            </Button>
+            <Button
+              type="button"
+              onClick={handleQuotationSubmit}
+              disabled={isSubmitting}
+            >
+              Save Quotation
+            </Button>
+            <div className="flex justify-between items-center p-4 bg-gray-50 rounded-md">
+              <span className="font-medium">Total Cost:</span>
+              <span>
+                ₱
+                {calculateTotalCost(
+                  form
+                    .getValues("materials")
+                    ?.filter(
+                      (m): m is NonNullable<typeof m> => m !== undefined
+                    ) || []
+                ).toLocaleString("en-PH", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Featured Design Checkbox */}
         <FormField
-          control={form.control as DesignFormControl}
+          control={form.control}
           name="isFeatured"
           render={({ field }) => (
             <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 border rounded-md">
@@ -774,7 +754,14 @@ export function DesignForm({
             <Button
               variant="outline"
               type="button"
-              onClick={onCancel}
+              onClick={() => {
+                onCancel();
+                form.reset();
+                setSelectedFiles([]);
+                setPreviews([]);
+                setRemovedImages([]);
+                setEstimatedCostInput("");
+              }}
               disabled={isSubmitting || isUploading}
             >
               Cancel

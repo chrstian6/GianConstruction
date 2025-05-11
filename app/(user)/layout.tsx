@@ -2,8 +2,9 @@
 
 import { Toaster } from "sonner";
 import Navbar from "@/components/Navbar";
-import ClientLayout from "./ClientLayout";
 import AuthModals from "@/components/AuthModals";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ModalProvider } from "@/contexts/ModalContext";
 
 export default function UserLayout({
   children,
@@ -13,13 +14,15 @@ export default function UserLayout({
   console.log("UserLayout: Rendering for user routes");
 
   return (
-    <ClientLayout isAdmin={false}>
-      <AuthModals />
-      <Navbar />
-      <div className="flex flex-col min-h-screen pt-16">
-        {children}
-        <Toaster position="bottom-right" richColors />
-      </div>
-    </ClientLayout>
+    <AuthProvider>
+      <ModalProvider>
+        <AuthModals />
+        <Navbar />
+        <div className="flex flex-col min-h-screen pt-16">
+          {children}
+          <Toaster position="bottom-right" richColors />
+        </div>
+      </ModalProvider>
+    </AuthProvider>
   );
 }

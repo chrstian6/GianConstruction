@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModal } from "@/contexts/ModalContext";
@@ -8,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import{ LoginForm }from "@/components/login-form";
+import { LoginForm } from "@/components/login-form";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import CreateAccountForm from "@/components/create-account-form";
 import OtpVerificationModal from "@/components/otp-verification-modal";
@@ -55,12 +56,19 @@ export default function AuthModals() {
               <DialogTitle>Login</DialogTitle>
             </VisuallyHidden>
           </DialogHeader>
-          <LoginForm
-            switchToCreateAccount={openCreateAccountModal}
-            onLogin={login}
-            onClose={closeAllModals}
-            isLoading={loading}
-          />
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mb-4"></div>
+              <p className="text-gray-600">Loading please wait...</p>
+            </div>
+          ) : (
+            <LoginForm
+              switchToCreateAccount={openCreateAccountModal}
+              onLogin={login}
+              onClose={closeAllModals}
+              isLoading={loading}
+            />
+          )}
         </DialogContent>
       </Dialog>
       <Dialog open={isCreateAccountOpen} onOpenChange={setIsCreateAccountOpen}>

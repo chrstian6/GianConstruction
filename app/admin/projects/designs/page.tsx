@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useState, useEffect } from "react";
 import { SubmitHandler } from "react-hook-form";
 import Image from "next/image";
@@ -32,7 +31,7 @@ import {
 import { DesignForm } from "@/components/projects/modals/DesignForm";
 import { Search, Filter, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Design, DesignFormValues } from "@/types/Design";
+import { Design, DesignFormValues, Quotation } from "@/types/Design";
 
 export default function ProjectDesignsPage() {
   const [designs, setDesigns] = useState<Design[]>([]);
@@ -40,10 +39,13 @@ export default function ProjectDesignsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [styleFilter, setStyleFilter] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [designToDelete, setDesignToDelete] = useState<string | null>(null);
+  const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
+  const [quotation, setQuotation] = useState<Quotation | null>(null);
 
   useEffect(() => {
     const fetchDesigns = async () => {
@@ -51,19 +53,12 @@ export default function ProjectDesignsPage() {
         const response = await fetch("/api/admin/projects/designs");
         if (response.ok) {
           const data = await response.json();
-          console.log("Fetched designs:", data.data);
           setDesigns(Array.isArray(data.data) ? data.data : []);
         } else {
           throw new Error("Failed to fetch designs");
         }
       } catch (error) {
-        console.error("Fetch error:", error);
-        toast.error("Failed to load designs", {
-          position: "bottom-right",
-          duration: 5000,
-          dismissible: true,
-          richColors: true,
-        });
+        toast.error("Failed to load designs");
         setDesigns([]);
       } finally {
         setLoading(false);
@@ -72,27 +67,28 @@ export default function ProjectDesignsPage() {
     fetchDesigns();
   }, []);
 
-  const handleSubmit: SubmitHandler<DesignFormValues> = async (values) => {
+  const fetchQuotation = async (designId: string) => {
+    try {
+      const response = await fetch(
+        `/api/admin/projects/designs/${designId}/quotation`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setQuotation(data.data || null);
+      } else {
+        setQuotation(null);
+      }
+    } catch (error) {
+      toast.error("Failed to load quotation");
+      setQuotation(null);
+    }
+  };
+
+  const handleCreateSubmit: SubmitHandler<DesignFormValues> = async (
+    values
+  ) => {
     setIsSubmitting(true);
     try {
-      console.log("Starting design submission:", values);
-
-      // Validate URLs if images are provided
-      if (values.images && values.images.length > 0) {
-        const isValidUrl = (url: string) => {
-          try {
-            new URL(url);
-            return true;
-          } catch {
-            return false;
-          }
-        };
-        const invalidUrls = values.images.filter((url) => !isValidUrl(url));
-        if (invalidUrls.length > 0) {
-          throw new Error(`Invalid image URLs: ${invalidUrls.join(", ")}`);
-        }
-      }
-
       const response = await fetch("/api/admin/projects/designs", {
         method: "POST",
         headers: {
@@ -103,35 +99,88 @@ export default function ProjectDesignsPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("API error:", errorData);
         throw new Error(errorData.error || "Failed to create design");
       }
 
       const result = await response.json();
       const newDesign = result.data;
-      console.log("Design saved successfully:", newDesign);
-
       setDesigns((prevDesigns) => [newDesign, ...prevDesigns]);
-      setIsModalOpen(false);
-      toast.success("Design created successfully", {
-        position: "bottom-right",
-        duration: 5000,
-        dismissible: true,
-        richColors: true,
-      });
+      setIsCreateModalOpen(false);
+      toast.success("Design created successfully");
     } catch (error) {
-      console.error("Submission error:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to create design",
-        {
-          position: "bottom-right",
-          duration: 5000,
-          dismissible: true,
-          richColors: true,
-        }
+        error instanceof Error ? error.message : "Failed to create design"
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit: SubmitHandler<DesignFormValues> = async (values) => {
+    if (!selectedDesign) return;
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        `/api/admin/projects/designs/${selectedDesign._id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(values),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update design");
+      }
+
+      const result = await response.json();
+      const updatedDesign = result.data;
+      setDesigns((prevDesigns) =>
+        prevDesigns.map((design) =>
+          design._id === updatedDesign._id ? updatedDesign : design
+        )
+      );
+      setIsEditModalOpen(false);
+      setSelectedDesign(null);
+      toast.success("Design updated successfully");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update design"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuotationSubmit = async (materials: Quotation["materials"]) => {
+    if (!selectedDesign) return;
+    try {
+      const response = await fetch(
+        `/api/admin/projects/designs/${selectedDesign._id}/quotation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ materials }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update quotation");
+      }
+
+      const result = await response.json();
+      setQuotation(result.data);
+      toast.success("Quotation updated successfully");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update quotation"
+      );
     }
   };
 
@@ -143,30 +192,24 @@ export default function ProjectDesignsPage() {
 
       if (response.ok) {
         setDesigns(designs.filter((design) => design._id !== id));
-        toast.success("Design deleted successfully", {
-          position: "bottom-right",
-          duration: 5000,
-          dismissible: true,
-          richColors: true,
-        });
+        toast.success("Design deleted successfully");
       } else {
         throw new Error("Failed to delete design");
       }
     } catch (error) {
-      console.error("Delete error:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to delete design",
-        {
-          position: "bottom-right",
-          duration: 5000,
-          dismissible: true,
-          richColors: true,
-        }
+        error instanceof Error ? error.message : "Failed to delete design"
       );
     } finally {
       setIsDeleteModalOpen(false);
       setDesignToDelete(null);
     }
+  };
+
+  const openEditModal = async (design: Design) => {
+    setSelectedDesign(design);
+    await fetchQuotation(design._id);
+    setIsEditModalOpen(true);
   };
 
   const openDeleteModal = (id: string) => {
@@ -182,7 +225,6 @@ export default function ProjectDesignsPage() {
       ? design.category === categoryFilter
       : true;
     const matchesStyle = styleFilter ? design.style === styleFilter : true;
-
     return matchesSearch && matchesCategory && matchesStyle;
   });
 
@@ -221,7 +263,7 @@ export default function ProjectDesignsPage() {
           </p>
         </div>
 
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -233,8 +275,8 @@ export default function ProjectDesignsPage() {
               <DialogTitle>Add New Design</DialogTitle>
             </DialogHeader>
             <DesignForm
-              onSubmit={handleSubmit}
-              onCancel={() => setIsModalOpen(false)}
+              onSubmit={handleCreateSubmit}
+              onCancel={() => setIsCreateModalOpen(false)}
               isSubmitting={isSubmitting}
             />
           </DialogContent>
@@ -328,7 +370,7 @@ export default function ProjectDesignsPage() {
                     </div>
                   )}
                   {design.isFeatured && (
-                    <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
+                    <div className="absolute top-2 right-2 bg-yellow-500 text-white{text-sm px-2 py-1 rounded">
                       Featured
                     </div>
                   )}
@@ -358,62 +400,25 @@ export default function ProjectDesignsPage() {
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-between gap-2">
-                <Button variant="outline" size="sm" className="flex-1" asChild>
-                  <Link href={`/admin/projects/designs/${design._id}`}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </Link>
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1" asChild>
-                  <Link href={`/admin/projects/new?designId=${design._id}`}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Project
-                  </Link>
-                </Button>
-                <Dialog
-                  open={isDeleteModalOpen}
-                  onOpenChange={setIsDeleteModalOpen}
+              <CardFooter className="flex justify-center gap-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-24"
+                  onClick={() => openEditModal(design)}
                 >
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => openDeleteModal(design._id)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-white/40 backdrop-blur-sm">
-                    <DialogHeader>
-                      <DialogTitle>Confirm Deletion</DialogTitle>
-                      <DialogDescription>
-                        Are you sure you want to delete the design "
-                        {designs.find((d) => d._id === designToDelete)?.title}"?
-                        This action cannot be undone.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsDeleteModalOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() =>
-                          designToDelete && handleDelete(designToDelete)
-                        }
-                        disabled={!designToDelete}
-                      >
-                        Delete
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-24"
+                  onClick={() => openDeleteModal(design._id)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
               </CardFooter>
             </Card>
           ))}
@@ -432,7 +437,7 @@ export default function ProjectDesignsPage() {
               : "Try adjusting your search or filter criteria"}
           </p>
           {designs.length === 0 ? (
-            <Button onClick={() => setIsModalOpen(true)}>
+            <Button onClick={() => setIsCreateModalOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add New Design
             </Button>
@@ -443,6 +448,58 @@ export default function ProjectDesignsPage() {
           )}
         </div>
       )}
+
+      {/* Edit Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-white backdrop-blur-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Design</DialogTitle>
+          </DialogHeader>
+          {selectedDesign && (
+            <DesignForm
+              onSubmit={handleEditSubmit}
+              onCancel={() => {
+                setIsEditModalOpen(false);
+                setSelectedDesign(null);
+                setQuotation(null);
+              }}
+              isSubmitting={isSubmitting}
+              defaultValues={selectedDesign}
+              quotation={quotation}
+              onQuotationSubmit={handleQuotationSubmit}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="bg-white/40 backdrop-blur-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the design "
+              {designs.find((d) => d._id === designToDelete)?.title}"? This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => designToDelete && handleDelete(designToDelete)}
+              disabled={!designToDelete}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
