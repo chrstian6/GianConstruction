@@ -101,35 +101,11 @@ export default function Navbar() {
         transition={{ duration: 0.5, ease: "easeOut" }}
       >
         {/* Global transparent scrollbar styles */}
-        <style jsx global>{`
-          html {
-            scroll-padding-top: 64px; /* Offset for fixed navbar */
-          }
-          body {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-            -ms-overflow-style: auto;
-          }
-          body::-webkit-scrollbar {
-            width: 8px;
-          }
-          body::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          body::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-          }
-          body::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 0, 0, 0.4);
-          }
-        `}</style>
 
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="text-2xl font-bold text-gray-900">
             Gian Construction
           </Link>
-
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-6">
             {navLinks.map((link, index) => (

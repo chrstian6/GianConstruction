@@ -140,7 +140,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pt-16">
+    <div className="min-h-screen flex flex-col ">
       {/* Hero Section with Spline */}
       <motion.section
         className="relative bg-gradient-to-r from-gray-50 to-gray-100 py-20 md:py-32 overflow-hidden"

@@ -50,7 +50,7 @@ const data = {
         },
         {
           title: "Design Catalog",
-          url: "/admin/projects/designs", // Moved designs under projects
+          url: "/admin/projects/designs",
         },
         {
           title: "Completed Projects",
@@ -101,6 +101,10 @@ const data = {
         {
           title: "Payroll",
           url: "#",
+        },
+        {
+          title: "User Management",
+          url: "/admin/workforce/users",
         },
       ],
     },
@@ -172,7 +176,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {data.navMain.map((item) => (
               <Collapsible
                 key={item.title}
-                defaultOpen={item.title === "Projects"} // Open Projects by default
+                defaultOpen={
+                  item.title === "Projects" || item.title === "Workforce"
+                }
                 className="group/collapsible"
               >
                 <SidebarMenuItem>
