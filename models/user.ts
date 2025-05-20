@@ -14,6 +14,8 @@ const userSchema = new mongoose.Schema(
     otpExpiry: { type: Date },
     tempRegistration: { type: Boolean, default: true },
     isActive: { type: Boolean, default: false },
+    createdByAdmin: { type: Boolean, default: false }, // New field
+    user_id: { type: String, unique: true }, // New field
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -35,6 +37,8 @@ export interface IUser extends mongoose.Document {
   otpExpiry?: Date;
   tempRegistration: boolean;
   isActive: boolean;
+  createdByAdmin: boolean; // New field
+  user_id?: string; // New field
   createdAt: Date;
   updatedAt: Date;
 }

@@ -643,7 +643,7 @@ export default function UserManagement() {
       </div>
 
       <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add New User</DialogTitle>
           </DialogHeader>

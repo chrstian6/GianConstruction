@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import User from "@/models/user";
+import Log from "@/models/Log";
 import bcrypt from "bcryptjs";
+import { generateUniqueUserId } from "@/lib/generateUserId";
 
 export async function POST(request: Request) {
   try {
     await dbConnect();
 
-    const { firstName, lastName, email, password, address, contact, gender } =
-      await request.json();
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      address,
+      contact,
+      gender,
+      createdByAdmin = false,
+      adminName = "System",
+    } = await request.json();
 
     if (!email || !password || !firstName || !lastName || !contact) {
       return NextResponse.json(
@@ -26,6 +37,7 @@ export async function POST(request: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = await generateUniqueUserId();
 
     if (existingUser && existingUser.tempRegistration) {
       await User.findOneAndUpdate(
@@ -38,14 +50,27 @@ export async function POST(request: Request) {
             address,
             contact,
             gender,
+            user_id: userId,
             otp: undefined,
             otpExpiry: undefined,
             tempRegistration: false,
             isActive: true,
+            createdByAdmin,
             updatedAt: new Date(),
           },
         }
       );
+
+      if (createdByAdmin) {
+        const log = new Log({
+          action: `User ${email} created by ${adminName}`,
+          adminName,
+          targetEmail: email,
+          targetName: `${firstName} ${lastName}`,
+          createdAt: new Date(),
+        });
+        await log.save();
+      }
 
       return NextResponse.json(
         { message: "Account activated successfully" },
@@ -61,14 +86,27 @@ export async function POST(request: Request) {
       address,
       contact,
       gender,
-      role: "user", // Added role with default value
+      role: "user",
+      user_id: userId,
       tempRegistration: false,
       isActive: true,
+      createdByAdmin,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
     await newUser.save();
+
+    if (createdByAdmin) {
+      const log = new Log({
+        action: `User ${email} created by ${adminName}`,
+        adminName,
+        targetEmail: email,
+        targetName: `${firstName} ${lastName}`,
+        createdAt: new Date(),
+      });
+      await log.save();
+    }
 
     return NextResponse.json(
       { message: "Registration successful" },
