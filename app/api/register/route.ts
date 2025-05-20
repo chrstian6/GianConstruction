@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import User from "@/models/user";
-import Log from "@/models/Log";
 import bcrypt from "bcryptjs";
 import { generateUniqueUserId } from "@/lib/generateUserId";
 
@@ -9,113 +8,60 @@ export async function POST(request: Request) {
   try {
     await dbConnect();
 
-    const {
-      firstName,
-      lastName,
-      email,
-      password,
-      address,
-      contact,
-      gender,
-      createdByAdmin = false,
-      adminName = "System",
-    } = await request.json();
+    const { email, otp } = await request.json();
 
-    if (!email || !password || !firstName || !lastName || !contact) {
+    if (!email || !otp) {
       return NextResponse.json(
-        { error: "All fields are required" },
+        { error: "Email and OTP are required" },
         { status: 400 }
       );
     }
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser && !existingUser.tempRegistration) {
-      return NextResponse.json(
-        { error: "Email already registered" },
-        { status: 400 }
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const userId = await generateUniqueUserId();
-
-    if (existingUser && existingUser.tempRegistration) {
-      await User.findOneAndUpdate(
-        { email },
-        {
-          $set: {
-            firstName,
-            lastName,
-            password: hashedPassword,
-            address,
-            contact,
-            gender,
-            user_id: userId,
-            otp: undefined,
-            otpExpiry: undefined,
-            tempRegistration: false,
-            isActive: true,
-            createdByAdmin,
-            updatedAt: new Date(),
-          },
-        }
-      );
-
-      if (createdByAdmin) {
-        const log = new Log({
-          action: `User ${email} created by ${adminName}`,
-          adminName,
-          targetEmail: email,
-          targetName: `${firstName} ${lastName}`,
-          createdAt: new Date(),
-        });
-        await log.save();
-      }
-
-      return NextResponse.json(
-        { message: "Account activated successfully" },
-        { status: 200 }
-      );
-    }
-
-    const newUser = new User({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      address,
-      contact,
-      gender,
-      role: "user",
-      user_id: userId,
-      tempRegistration: false,
-      isActive: true,
-      createdByAdmin,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const user = await User.findOne({
+      email: { $regex: new RegExp(`^${email}$`, "i") },
+      tempRegistration: true,
     });
 
-    await newUser.save();
-
-    if (createdByAdmin) {
-      const log = new Log({
-        action: `User ${email} created by ${adminName}`,
-        adminName,
-        targetEmail: email,
-        targetName: `${firstName} ${lastName}`,
-        createdAt: new Date(),
-      });
-      await log.save();
+    if (!user) {
+      return NextResponse.json(
+        { error: "No pending registration found for this email" },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json(
-      { message: "Registration successful" },
-      { status: 201 }
-    );
+    if (user.otp !== otp || user.otpExpiry < new Date()) {
+      return NextResponse.json(
+        { error: "Invalid or expired OTP" },
+        { status: 400 }
+      );
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+    const userId = await generateUniqueUserId();
+
+    // Activate user
+    user.password = hashedPassword;
+    user.user_id = userId;
+    user.otp = null;
+    user.otpExpiry = null;
+    user.tempRegistration = false;
+    user.isActive = true;
+    user.updatedAt = new Date();
+
+    await user.save();
+
+    console.log("User activated:", {
+      email: user.email,
+      isActive: user.isActive,
+      tempRegistration: user.tempRegistration,
+    });
+
+    return NextResponse.json({ message: "Account activated successfully" });
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("Error verifying OTP:", error);
     return NextResponse.json(
-      { error: "Failed to register user" },
+      { error: "Failed to verify OTP" },
       { status: 500 }
     );
   }

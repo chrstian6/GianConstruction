@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils"; // Add this import
+
+import { useState, useEffect, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import {
   Form,
@@ -20,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -29,41 +29,66 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import OtpVerificationModal from "./otp-verification-modal";
+import { toast } from "sonner";
+import * as z from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import debounce from "lodash/debounce";
 
 interface CreateAccountFormProps {
   switchToLogin: () => void;
   onRegistrationSuccess: (email: string, password: string) => void;
-  className?: string; // Added className prop
+  className?: string;
 }
 
-interface FormValues {
-  firstName: string;
-  lastName: string;
-  email: string;
-  contact: string;
-  address: string;
-  gender: string;
-  password: string;
-  confirmPassword: string;
-}
+const baseFormSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  contact: z.string().min(1, "Contact number is required"),
+  address: z.string().min(1, "Address is required"),
+  gender: z.enum(["male", "female", "other", "prefer-not-to-say"]).optional(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(6, "Please confirm your password"),
+  otp: z.string().optional(),
+});
+
+const formSchema = baseFormSchema.refine(
+  (data) => data.password === data.confirmPassword,
+  {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  }
+);
+
+const otpFormSchema = baseFormSchema
+  .extend({
+    otp: z
+      .string()
+      .min(6, "OTP must be 6 characters")
+      .max(6, "OTP must be 6 characters"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+type FormValues = z.infer<typeof formSchema>;
 
 export default function CreateAccountForm({
   switchToLogin,
   onRegistrationSuccess,
-  className, // Added className prop
+  className,
 }: CreateAccountFormProps) {
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordMatch, setPasswordMatch] = useState(true);
-  const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [formValues, setFormValues] = useState<FormValues | null>(null);
+  const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
+    resolver: zodResolver(otpSent ? otpFormSchema : formSchema),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -73,140 +98,204 @@ export default function CreateAccountForm({
       gender: "prefer-not-to-say",
       password: "",
       confirmPassword: "",
+      otp: "",
     },
     mode: "onChange",
   });
 
+  // Watch form state for debugging
+  const formState = form.formState;
+  useEffect(() => {
+    console.log("User Form state:", {
+      isValid: formState.isValid,
+      errors: formState.errors,
+      isSubmitting: formState.isSubmitting,
+      emailAvailable,
+      emailError,
+    });
+  }, [formState, emailAvailable, emailError]);
+
+  // Real-time email validation
+  const checkEmailAvailability = useCallback(
+    debounce(async (email: string) => {
+      if (!email || !z.string().email().safeParse(email).success) {
+        setEmailAvailable(null);
+        setEmailError(null);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/check-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json();
+
+        if (response.ok && data.available) {
+          setEmailAvailable(true);
+          setEmailError(null);
+        } else {
+          setEmailAvailable(false);
+          setEmailError(data.error || "Email already registered");
+        }
+      } catch (err) {
+        setEmailAvailable(false);
+        setEmailError("Failed to check email availability");
+      }
+    }, 500),
+    []
+  );
+
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      if (name === "password" || name === "confirmPassword") {
-        const password = value.password;
-        const confirmPassword = value.confirmPassword;
-        if (password && confirmPassword) {
-          setPasswordMatch(password === confirmPassword);
-        } else {
-          setPasswordMatch(true);
-        }
+      if (name === "email") {
+        checkEmailAvailability(value.email || "");
       }
     });
     return () => subscription.unsubscribe();
-  }, [form.watch]);
+  }, [form.watch, checkEmailAvailability]);
 
-  const validatePasswordMatch = (value: string) => {
-    return value === form.getValues("password") || "Passwords do not match";
-  };
-
-  const onSubmit = async (values: FormValues) => {
-    setError("");
-    setSuccess("");
+  const sendOtp = async (values: FormValues) => {
+    console.log("Sending OTP with values:", values);
     setIsLoading(true);
-
-    if (values.password !== values.confirmPassword) {
-      setError("Passwords do not match");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const otpResponse = await fetch("/api/send-registration-otp", {
+      const response = await fetch("/api/send-registration-otp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
         credentials: "include",
       });
-
-      const otpData = await otpResponse.json();
-      if (!otpResponse.ok) {
-        throw new Error(otpData.message || "Failed to send OTP.");
+      const data = await response.json();
+      if (!response.ok) {
+        toast.error("Failed to send OTP", {
+          description: data.error || "An error occurred",
+        });
+        return false;
       }
-
-      setFormValues(values);
-      setShowOtpDialog(true);
-    } catch (err) {
-      console.error("Error during registration:", err);
-      setError("Failed to register. Please try again.");
+      toast.success("OTP sent to your email");
+      setOtpSent(true);
+      return true;
+    } catch (err: any) {
+      toast.error("Failed to send OTP", {
+        description: err.message || "An error occurred",
+      });
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleOtpSuccess = async () => {
-    if (!formValues) return;
-
+  const verifyOtp = async (values: FormValues) => {
+    console.log("Verifying OTP with values:", values);
+    setIsLoading(true);
     try {
       const response = await fetch("/api/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formValues.email, otp: "123456" }),
+        body: JSON.stringify({ otp: values.otp, email: values.email }),
+        credentials: "include",
       });
-
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || "OTP verification failed");
+        toast.error("Failed to verify OTP", {
+          description: data.error || "Invalid OTP",
+        });
+        return false;
       }
 
-      setShowOtpDialog(false);
+      toast.success("Account created successfully", {
+        description: data.message,
+      });
       setShowSuccessDialog(true);
-      onRegistrationSuccess(formValues.email, formValues.password);
-    } catch (err) {
-      console.error("Error verifying OTP:", err);
-      setError("Failed to verify OTP. Please try again.");
+      return true;
+    } catch (err: any) {
+      toast.error("Failed to create account", {
+        description: err.message || "An error occurred",
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleResendOtp = async () => {
-    if (!formValues) return;
-
+  const resendOtp = async (email: string) => {
+    if (!email) {
+      toast.error("Email is required to resend OTP");
+      return false;
+    }
+    console.log("Resending OTP for email:", email);
+    setIsLoading(true);
     try {
       const response = await fetch("/api/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formValues.email }),
+        body: JSON.stringify({ email }),
+        credentials: "include",
       });
-
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || "Failed to resend verification code.");
+        toast.error("Failed to resend OTP", {
+          description: data.error || "An error occurred",
+        });
+        return false;
       }
+      toast.success("OTP resent to your email");
+      form.setValue("otp", "");
+      return true;
+    } catch (err: any) {
+      toast.error("Failed to resend OTP", {
+        description: err.message || "An error occurred",
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      setError("");
-    } catch (err) {
-      console.error("Error resending OTP:", err);
-      setError("Failed to resend verification code.");
+  const onSubmit = async (values: FormValues) => {
+    console.log("Form submitted with values:", values, "otpSent:", otpSent);
+    if (!otpSent) {
+      const success = await sendOtp(values);
+      if (!success) return;
+    } else {
+      const success = await verifyOtp(values);
+      if (!success) return;
     }
   };
 
   const handleSuccessClose = () => {
     setShowSuccessDialog(false);
     form.reset();
+    setOtpSent(false);
+    setEmailAvailable(null);
+    setEmailError(null);
+    onRegistrationSuccess(form.getValues().email, form.getValues().password);
     switchToLogin();
   };
 
   return (
     <>
-      <Card className={cn("w-full max-w-2xl mx-auto", className)}>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
-            Create Account
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card
+        className={cn(
+          "w-full max-w-2xl mx-auto shadow-none border-none",
+          className
+        )}
+      >
+        <CardContent className="pt-6">
+          <CardHeader>
+            <CardTitle className="text-xl text-primary text-center mb-10">
+              Create User Account
+            </CardTitle>
+          </CardHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="firstName"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>First Name</FormLabel>
                       <FormControl>
                         <Input placeholder="First Name" {...field} />
@@ -214,13 +303,12 @@ export default function CreateAccountForm({
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{ required: "Please enter your first name" }}
                 />
                 <FormField
                   control={form.control}
                   name="lastName"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Last Name</FormLabel>
                       <FormControl>
                         <Input placeholder="Last Name" {...field} />
@@ -228,33 +316,27 @@ export default function CreateAccountForm({
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{ required: "Please enter your last name" }}
                 />
                 <FormField
                   control={form.control}
                   name="email"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Email</FormLabel>
                       <FormControl>
                         <Input placeholder="Email" type="email" {...field} />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage>
+                        {emailError && <span>{emailError}</span>}
+                      </FormMessage>
                     </FormItem>
                   )}
-                  rules={{
-                    required: "Please enter your email",
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: "Invalid email address",
-                    },
-                  }}
                 />
                 <FormField
                   control={form.control}
                   name="contact"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Contact Number</FormLabel>
                       <FormControl>
                         <Input placeholder="Contact Number" {...field} />
@@ -262,15 +344,12 @@ export default function CreateAccountForm({
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{
-                    required: "Please enter your contact number",
-                  }}
                 />
                 <FormField
                   control={form.control}
                   name="address"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Address</FormLabel>
                       <FormControl>
                         <Input placeholder="Address" {...field} />
@@ -278,13 +357,12 @@ export default function CreateAccountForm({
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{ required: "Please enter your address" }}
                 />
                 <FormField
                   control={form.control}
                   name="gender"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Gender</FormLabel>
                       <Select
                         onValueChange={field.onChange}
@@ -299,18 +377,20 @@ export default function CreateAccountForm({
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
+                          <SelectItem value="prefer-not-to-say">
+                            Prefer not to say
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{ required: "Please select your gender" }}
                 />
                 <FormField
                   control={form.control}
                   name="password"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Password</FormLabel>
                       <FormControl>
                         <div className="relative">
@@ -331,19 +411,12 @@ export default function CreateAccountForm({
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{
-                    required: "Please enter a password",
-                    minLength: {
-                      value: 6,
-                      message: "Password must be at least 6 characters",
-                    },
-                  }}
                 />
                 <FormField
                   control={form.control}
                   name="confirmPassword"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col min-h-[20px]">
                       <FormLabel>Confirm Password</FormLabel>
                       <FormControl>
                         <div className="relative">
@@ -366,27 +439,74 @@ export default function CreateAccountForm({
                       <FormMessage />
                     </FormItem>
                   )}
-                  rules={{
-                    required: "Please confirm your password",
-                    validate: validatePasswordMatch,
-                  }}
                 />
+                {otpSent && (
+                  <FormField
+                    control={form.control}
+                    name="otp"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col min-h-[20px] md:col-span-2">
+                        <FormLabel>OTP</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter 6-digit OTP" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="p-0 h-auto text-sm mt-2"
+                          onClick={() => resendOtp(form.getValues().email)}
+                          disabled={isLoading || !form.getValues().email}
+                        >
+                          Resend OTP
+                        </Button>
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
-              <Button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary/90"
-                disabled={isLoading || !passwordMatch}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Account...
-                  </>
-                ) : (
-                  "Create Account"
-                )}
-              </Button>
+              <div className="flex gap-4">
+                <Button
+                  type="submit"
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                  disabled={
+                    isLoading ||
+                    !form.formState.isValid ||
+                    form.formState.isSubmitting ||
+                    emailAvailable !== true
+                  }
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {otpSent ? "Verifying OTP..." : "Sending OTP..."}
+                    </>
+                  ) : otpSent ? (
+                    "Verify OTP and Create Account"
+                  ) : (
+                    "Send OTP"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={switchToLogin}
+                >
+                  Cancel
+                </Button>
+              </div>
+
+              {/* Debug UI */}
+              <p className="text-sm text-gray-500 mt-2">
+                Form Valid: {form.formState.isValid.toString()}, Submitting:{" "}
+                {form.formState.isSubmitting.toString()}, Email Available:{" "}
+                {emailAvailable?.toString() ?? "N/A"}, Errors:{" "}
+                {Object.keys(form.formState.errors).length > 0
+                  ? JSON.stringify(form.formState.errors)
+                  : "None"}
+              </p>
 
               <p className="text-sm mt-4 text-center">
                 Already have an account?{" "}
@@ -402,15 +522,6 @@ export default function CreateAccountForm({
           </Form>
         </CardContent>
       </Card>
-
-      <OtpVerificationModal
-        isOpen={showOtpDialog}
-        onClose={() => setShowOtpDialog(false)}
-        email={formValues?.email || ""}
-        onSuccess={handleOtpSuccess}
-        onResend={handleResendOtp}
-        openLoginModal={switchToLogin}
-      />
 
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
         <DialogContent className="sm:max-w-[425px]">
